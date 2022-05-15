@@ -47,26 +47,53 @@ namespace Raytracing
         public Vector3 lowerLeftCorner;
     }
 
+    public class Light
+    {
+        public Light(Vector3 inputOrigin, float inputBrightness)
+        {
+            position = inputOrigin;
+            brightness = inputBrightness;
+        }
+
+        public Vector3 position;
+        public float brightness;
+    }
+
     // general class defining hittable surfaces
     public class Surface
     {
-        public Vector3 point;
-        public Vector3 normal;
-        public float t;
-        public bool frontFace;
-
-        public void setFaceNormal(CustomRay ray, Vector3 outwardNormal)
-        {
-            frontFace = Vector3.Dot(ray.direction, outwardNormal) < 0;
-            normal = frontFace ? outwardNormal : -outwardNormal;
-        }
-        
-        public virtual bool hit(CustomRay ray, float t_min, float t_max)
+        public virtual bool hit(CustomRay ray, float t_min, float t_max, hitRecord record)
         {
             return false;
         }
     }
 
+    // stores list of things hit
+    public class SurfaceList : Surface
+    {
+        public List<Surface> surfaces = new List<Surface>();
+
+        public override bool hit(CustomRay ray, float t_min, float t_max, hitRecord record)
+        {
+            hitRecord tempRecord = record;
+            bool hitAnything = false;
+            float closestSoFar = t_max;
+
+            foreach (Surface surface in surfaces)
+            {
+                if (surface.hit(ray, t_min, closestSoFar, tempRecord))
+                {
+                    hitAnything = true;
+                    closestSoFar = tempRecord.t;
+                    record = tempRecord;
+                }
+            }
+
+            return hitAnything;
+        }
+    }
+
+    // sphere surface derivative
     public class Sphere : Surface
     {
         public Sphere(Vector3 inputOrigin, float inputRadius)
@@ -75,7 +102,7 @@ namespace Raytracing
             radius = inputRadius;
         }
 
-        public override bool hit(CustomRay ray, float t_min, float t_max)
+        public override bool hit(CustomRay ray, float t_min, float t_max, hitRecord record)
         {
             Vector3 distance = ray.origin - origin;
             float a = Vector3.DistanceSquared(ray.direction, Vector3.Zero);
@@ -96,10 +123,10 @@ namespace Raytracing
                     return false;
             }
 
-            t = root;
-            point = ray.getPos(t);
-            Vector3 outwardNormal = (point - origin) / radius;
-            setFaceNormal(ray, outwardNormal);
+            record.t = root;
+            record.point = ray.getPos(record.t);
+            Vector3 outwardNormal = (record.point - origin) / radius;
+            record.setFaceNormal(ray, outwardNormal);
 
             return true;
         }
@@ -108,55 +135,18 @@ namespace Raytracing
         public float radius;
     }
 
-    // stores list of things hit
-    public class SurfaceList : Surface
+    // data class for storing data about hit points
+    public class hitRecord
     {
-        public List<Surface> surfaces = new List<Surface>();
+        public Vector3 point;
+        public Vector3 normal;
+        public float t;
+        public bool frontFace;
 
-        public override bool hit(CustomRay ray, float t_min, float t_max)
+        public void setFaceNormal(CustomRay ray, Vector3 outwardNormal)
         {
-            bool hitAnything = false;
-            float closestSoFar = t_max;
-
-            foreach (Surface surface in surfaces)
-            {
-                if (surface.hit(ray, t_min, t_max))
-                {
-                    hitAnything = true;
-                    closestSoFar = t;
-                }
-            }
-
-            return hitAnything;
-        }
-    }
-
-    // used to pull data from the custom ray class
-    public static class RayFunctions
-    {
-        public static Vector3 GetRayColor(CustomRay ray, Surface world)
-        {
-            if (world.hit(ray, 0, float.PositiveInfinity))
-            {
-                return world.normal;
-            }
-            Vector3 direction = Vector3.Normalize(ray.direction);
-            float t = 0.5f * (direction.Y + 1);
-            return t * new Vector3(1, 1, 1) + (1 - t) * new Vector3(0.5f, 0.7f, 1);
-        }
-
-        public static float RaySphereIntersection(Sphere sphere, CustomRay ray)
-        {
-            Vector3 distance = ray.origin - sphere.origin;
-            float a = Vector3.DistanceSquared(ray.direction, Vector3.Zero);
-            float half_b = Vector3.Dot(distance, ray.direction);
-            float c = Vector3.DistanceSquared(distance, Vector3.Zero) - sphere.radius * sphere.radius;
-            float discriminant = half_b*half_b - a*c;
-
-            if (discriminant < 0)
-                return -1;
-            else
-                return (-half_b - (float)Math.Sqrt(discriminant)) / (2*a);
+            frontFace = Vector3.Dot(ray.direction, outwardNormal) < 0;
+            normal = frontFace ? outwardNormal : -outwardNormal;
         }
     }
 }
