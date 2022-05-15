@@ -45,12 +45,12 @@ namespace Raytracing
 
             if (world.hit(ray, 0.001f, float.PositiveInfinity, record))
             {
-                Vector3 target = record.point + record.normal + RandomNormalVector.ReturnRandomVector(random);
+                Vector3 target = record.point + record.normal + RandomVector.ReturnRandomNormalizedUnitSphereVector(random);
                 return 0.5f * (GetRayColor(new CustomRay(record.point, target - record.point), world, random, depth-1));
             }
             Vector3 direction = Vector3.Normalize(ray.direction);
             float t = 0.5f * (direction.Y + 1);
-            return t * new Vector3(0.45f, 0.55f, 0.15f) + (1 - t) * new Vector3(1, 1, 1);
+            return t * new Vector3(0.85f, 0.75f, 1f) + (1 - t) * new Vector3(1, 1, 1);
         }
 
         public static float RaySphereIntersection(Sphere sphere, CustomRay ray)

@@ -27,7 +27,7 @@ namespace simpleRaytracer
         SurfaceList world = new SurfaceList();
 
         // define how many samples to cast per pixel, and how deep each recursive child ray can go
-        int samples = 150;
+        int samples = 200;
         int maxDepth = 8;
         Random random = new Random();
 
