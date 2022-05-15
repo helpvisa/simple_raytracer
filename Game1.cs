@@ -22,9 +22,9 @@ namespace simpleRaytracer
         // aspect ratio
         float aspectRatio;
 
-        // create global camera
+        // create global camera and world
         Camera camera;
-        Sphere testSphere;
+        SurfaceList world = new SurfaceList();
 
 
         public Game1()
@@ -42,10 +42,11 @@ namespace simpleRaytracer
             aspectRatio = (float)width / (float)height;
             
             // initialize the camera
-            camera = new Camera(new Vector3(0,0,0), new Vector3(0,0,1), 1f, 2, aspectRatio);
+            camera = new Camera(new Vector3(0,0,0), new Vector3(0,0,1f), 5f, 2, aspectRatio);
 
-            // initialize spheres
-            testSphere = new Sphere(new Vector3(0f, 0f, -2f), 1f);
+            // initialize surfaces
+            world.surfaces.Add(new Sphere(new Vector3(0f, 0f, -12f), 1f));
+            world.surfaces.Add(new Sphere(new Vector3(-6.5f, 3f, -32f), 2f));
 
             base.Initialize();
         }
@@ -81,7 +82,7 @@ namespace simpleRaytracer
                     Color rayColor;
 
                     // intersect ray against bg and objects
-                    Vector3 vectorColor = RayFunctions.GetRayColor(ray, testSphere);
+                    Vector3 vectorColor = RayFunctions.GetRayColor(ray, world);
 
                     rayColor = new Color(vectorColor.X, vectorColor.Y, vectorColor.Z);
 

@@ -50,7 +50,18 @@ namespace Raytracing
     // general class defining hittable surfaces
     public class Surface
     {
-        public virtual bool hit(CustomRay ray, float t_min, float t_max, hitRecord record)
+        public Vector3 point;
+        public Vector3 normal;
+        public float t;
+        public bool frontFace;
+
+        public void setFaceNormal(CustomRay ray, Vector3 outwardNormal)
+        {
+            frontFace = Vector3.Dot(ray.direction, outwardNormal) < 0;
+            normal = frontFace ? outwardNormal : -outwardNormal;
+        }
+        
+        public virtual bool hit(CustomRay ray, float t_min, float t_max)
         {
             return false;
         }
@@ -64,7 +75,7 @@ namespace Raytracing
             radius = inputRadius;
         }
 
-        public override bool hit(CustomRay ray, float t_min, float t_max, hitRecord record)
+        public override bool hit(CustomRay ray, float t_min, float t_max)
         {
             Vector3 distance = ray.origin - origin;
             float a = Vector3.DistanceSquared(ray.direction, Vector3.Zero);
@@ -85,10 +96,10 @@ namespace Raytracing
                     return false;
             }
 
-            record.t = root;
-            record.point = ray.getPos(record.t);
-            Vector3 outwardNormal = (record.point - origin) / radius;
-            record.setFaceNormal(ray, outwardNormal);
+            t = root;
+            point = ray.getPos(t);
+            Vector3 outwardNormal = (point - origin) / radius;
+            setFaceNormal(ray, outwardNormal);
 
             return true;
         }
@@ -100,21 +111,19 @@ namespace Raytracing
     // stores list of things hit
     public class SurfaceList : Surface
     {
-        List<Surface> surfaces = new List<Surface>();
+        public List<Surface> surfaces = new List<Surface>();
 
-        public override bool hit(CustomRay ray, float t_min, float t_max, hitRecord record)
+        public override bool hit(CustomRay ray, float t_min, float t_max)
         {
-            hitRecord tempRecord = record;
             bool hitAnything = false;
             float closestSoFar = t_max;
 
             foreach (Surface surface in surfaces)
             {
-                if (surface.hit(ray, t_min, t_max, tempRecord))
+                if (surface.hit(ray, t_min, t_max))
                 {
                     hitAnything = true;
-                    closestSoFar = tempRecord.t;
-                    record = tempRecord;
+                    closestSoFar = t;
                 }
             }
 
@@ -122,38 +131,18 @@ namespace Raytracing
         }
     }
 
-    // struct for storing properties of a hit surface
-    public struct hitRecord
-    {
-        public Vector3 point;
-        public Vector3 normal;
-        public float t;
-        public bool frontFace;
-
-        public void setFaceNormal(CustomRay ray, Vector3 outwardNormal)
-        {
-            frontFace = Vector3.Dot(ray.direction, outwardNormal) < 0;
-            normal = frontFace ? outwardNormal : -outwardNormal;
-        }
-    }
-
     // used to pull data from the custom ray class
     public static class RayFunctions
     {
-        public static Vector3 GetRayColor(CustomRay ray, Sphere sphere)
+        public static Vector3 GetRayColor(CustomRay ray, Surface world)
         {
-            // get colour of sphere from its normal
-            float t = RaySphereIntersection(sphere, ray);
-            if (t > 0)
+            if (world.hit(ray, 0, float.PositiveInfinity))
             {
-                Vector3 normal = Vector3.Normalize(ray.getPos(t) - new Vector3(0, 0, -1));
-                return 0.5f * new Vector3(normal.X + 1, normal.Y + 1, normal.Z + 1);
+                return world.normal;
             }
-            
-            // otherwise return background colour
             Vector3 direction = Vector3.Normalize(ray.direction);
-            t = 0.5f * (ray.direction.Y + 1f);
-            return t * new Vector3(1f, 1f, 1f) + (1 - t) * new Vector3(0.5f, 0.7f, 1f);
+            float t = 0.5f * (direction.Y + 1);
+            return t * new Vector3(1, 1, 1) + (1 - t) * new Vector3(0.5f, 0.7f, 1);
         }
 
         public static float RaySphereIntersection(Sphere sphere, CustomRay ray)
