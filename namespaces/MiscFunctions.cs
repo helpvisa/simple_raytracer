@@ -10,7 +10,7 @@ namespace MiscFunctions
         // return normalize random vector
         public static Vector3 ReturnRandomVector(Random random)
         {
-            return Vector3.Normalize(new Vector3((float)random.Next(-100, 100) / 100, (float)random.Next(-100, 100) / 100, (float)random.Next(-100, 100) / 100));
+            return new Vector3((float)random.Next(-100, 100) / 100, (float)random.Next(-100, 100) / 100, (float)random.Next(-100, 100) / 100);
         }
 
         // for minute variances in reflection (roughness)
@@ -285,7 +285,7 @@ namespace MiscFunctions
             return array;
         }
 
-        public static Color[] Despeckle(Color[] array, int width, int height, float weight)
+        public static Color[] Despeckle(Color[] array, int width, int height, float weight, float threshold)
         {
             for (int y = 0; y < height; y++)
             {
@@ -294,124 +294,71 @@ namespace MiscFunctions
                 {
                     if (y > 0 && y < height - 1 && x > 0 && x < width - 1)
                     {
-                        List<Vector3> colorsToBlur = new List<Vector3>();
-                        List<StoreColorBufferVector> identities = new List<StoreColorBufferVector>();
-                        
                         Vector3 originalColor;
                         Vector3 grayscaleOriginal;
                         Vector3 tempColorLeft;
-                        Vector3 grayscaleLeft;
                         Vector3 tempColorRight;
-                        Vector3 grayscaleRight;
                         Vector3 tempColorUp;
-                        Vector3 grayscaleUp;
                         Vector3 tempColorDown;
-                        Vector3 grayscaleDown;
                         Vector3 tempColorLeftUp;
-                        Vector3 grayscaleLeftUp;
                         Vector3 tempColorRightUp;
-                        Vector3 grayscaleRightUp;
                         Vector3 tempColorLeftDown;
-                        Vector3 grayscaleLeftDown;
                         Vector3 tempColorRightDown;
-                        Vector3 grayscaleRightDown;
 
                         float mixdown;
 
                         weight = Math.Clamp(weight, 0, 1);
 
-                        originalColor.X = originalArray[x + (y * width)].R;
-                        originalColor.Y = originalArray[x + (y * width)].G;
-                        originalColor.Z = originalArray[x + (y * width)].B;
+                        originalColor.X = (float)originalArray[x + (y * width)].R;
+                        originalColor.Y = (float)originalArray[x + (y * width)].G;
+                        originalColor.Z = (float)originalArray[x + (y * width)].B;
                         mixdown = originalColor.X * 0.3f + originalColor.Y * 0.6f + originalColor.Z * 0.11f;
                         grayscaleOriginal = new Vector3(mixdown, mixdown, mixdown);
 
                         tempColorLeft.X = originalArray[x - 1 + (y * width)].R;
                         tempColorLeft.Y = originalArray[x - 1 + (y * width)].G;
                         tempColorLeft.Z = originalArray[x - 1 + (y * width)].B;
-                        mixdown = tempColorLeft.X * 0.3f + tempColorLeft.Y * 0.6f + tempColorLeft.Z * 0.11f;
-                        grayscaleLeft = new Vector3(mixdown, mixdown, mixdown);
-                        identities.Add(new StoreColorBufferVector(grayscaleLeft, tempColorLeft));
 
                         tempColorRight.X = originalArray[x + 1 + (y * width)].R;
                         tempColorRight.Y = originalArray[x + 1 + (y * width)].G;
                         tempColorRight.Z = originalArray[x + 1 + (y * width)].B;
-                        mixdown = tempColorRight.X * 0.3f + tempColorRight.Y * 0.6f + tempColorRight.Z * 0.11f;
-                        grayscaleRight = new Vector3(mixdown, mixdown, mixdown);
-                        identities.Add(new StoreColorBufferVector(grayscaleRight, tempColorRight));
 
                         tempColorUp.X = originalArray[x + ((y - 1) * width)].R;
                         tempColorUp.Y = originalArray[x + ((y - 1) * width)].G;
                         tempColorUp.Z = originalArray[x + ((y - 1) * width)].B;
-                        mixdown = tempColorUp.X * 0.3f + tempColorUp.Y * 0.6f + tempColorUp.Z * 0.11f;
-                        grayscaleUp = new Vector3(mixdown, mixdown, mixdown);
-                        identities.Add(new StoreColorBufferVector(grayscaleUp, tempColorUp));
 
                         tempColorDown.X = originalArray[x + ((y + 1) * width)].R;
                         tempColorDown.Y = originalArray[x + ((y + 1) * width)].G;
                         tempColorDown.Z = originalArray[x + ((y + 1) * width)].B;
-                        mixdown = tempColorDown.X * 0.3f + tempColorDown.Y * 0.6f + tempColorDown.Z * 0.11f;
-                        grayscaleDown = new Vector3(mixdown, mixdown, mixdown);
-                        identities.Add(new StoreColorBufferVector(grayscaleDown, tempColorDown));
 
                         tempColorLeftUp.X = originalArray[x - 1 + ((y - 1) * width)].R;
                         tempColorLeftUp.Y = originalArray[x - 1 + ((y - 1) * width)].G;
                         tempColorLeftUp.Z = originalArray[x - 1 + ((y - 1) * width)].B;
-                        mixdown = tempColorLeftUp.X * 0.3f + tempColorLeftUp.Y * 0.6f + tempColorLeftUp.Z * 0.11f;
-                        grayscaleLeftUp = new Vector3(mixdown, mixdown, mixdown);
-                        identities.Add(new StoreColorBufferVector(grayscaleLeftUp, tempColorLeftUp));
 
                         tempColorLeftDown.X = originalArray[x - 1 + ((y + 1) * width)].R;
                         tempColorLeftDown.Y = originalArray[x - 1 + ((y + 1) * width)].G;
                         tempColorLeftDown.Z = originalArray[x - 1 + ((y + 1) * width)].B;
-                        mixdown = tempColorLeftDown.X * 0.3f + tempColorLeftDown.Y * 0.6f + tempColorLeftDown.Z * 0.11f;
-                        grayscaleLeftDown = new Vector3(mixdown, mixdown, mixdown);
-                        identities.Add(new StoreColorBufferVector(grayscaleLeftDown, tempColorLeftDown));
 
                         tempColorRightUp.X = originalArray[x + 1 + ((y - 1) * width)].R;
                         tempColorRightUp.Y = originalArray[x + 1 + ((y - 1) * width)].G;
                         tempColorRightUp.Z = originalArray[x + 1 + ((y - 1) * width)].B;
-                        mixdown = tempColorRightUp.X * 0.3f + tempColorRightUp.Y * 0.6f + tempColorRightUp.Z * 0.11f;
-                        grayscaleRightUp = new Vector3(mixdown, mixdown, mixdown);
-                        identities.Add(new StoreColorBufferVector(grayscaleRightUp, tempColorRightUp));
 
                         tempColorRightDown.X = originalArray[x + 1 + ((y + 1) * width)].R;
                         tempColorRightDown.Y = originalArray[x + 1 + ((y + 1) * width)].G;
                         tempColorRightDown.Z = originalArray[x + 1 + ((y + 1) * width)].B;
-                        mixdown = tempColorRightDown.X * 0.3f + tempColorRightDown.Y * 0.6f + tempColorRightDown.Z * 0.11f;
-                        grayscaleRightDown = new Vector3(mixdown, mixdown, mixdown);
-                        identities.Add(new StoreColorBufferVector(grayscaleRightDown, tempColorRightDown));
 
-                        foreach (StoreColorBufferVector identity in identities)
+                        if (grayscaleOriginal.X <= 0 || grayscaleOriginal.X > threshold)
                         {
-                            if (Math.Abs(grayscaleOriginal.X) == 0)
-                            {
-                                colorsToBlur.Add(identity.original);
-                            }
+                            Vector3 blurColor = (originalColor * (1 - weight))
+                                              + (((tempColorLeft + tempColorRight + tempColorUp + tempColorDown + tempColorLeftUp + tempColorLeftDown + tempColorRightUp + tempColorRightDown) / 8) * weight);
+
+                            Vector3 newVectorColor = (originalColor * (1 - weight))
+                                                   + (blurColor * weight);
+
+                            Color returnColor = new Color(newVectorColor.X / 255, newVectorColor.Y / 255, newVectorColor.Z / 255);
+
+                            array[x + (y * width)] = returnColor;
                         }
-
-                        Vector3 blurColor;
-                        if (colorsToBlur.Count != 0)
-                        {
-                            blurColor = colorsToBlur[0];
-                            foreach (Vector3 color in colorsToBlur)
-                            {
-                                if (color != colorsToBlur[0])
-                                {
-                                    blurColor /= 2;
-                                    blurColor += color / 2;
-                                }
-                            }
-                        }
-                        else
-                            blurColor = originalColor;
-
-                        Vector3 newVectorColor = (originalColor * (1 - weight))
-                                               + (blurColor * weight);
-
-                        Color returnColor = new Color(newVectorColor.X / 255, newVectorColor.Y / 255, newVectorColor.Z / 255);
-
-                        array[x + (y * width)] = returnColor;
                     }
                 }
             }

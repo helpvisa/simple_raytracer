@@ -1,6 +1,5 @@
 using Microsoft.Xna.Framework;
 using System;
-using System.Collections.Generic;
 using MiscFunctions;
 
 namespace Raytracing
@@ -91,7 +90,7 @@ namespace Raytracing
                 }
                 
                 // get light + shadow pass
-                Vector3 lightAlbedo = GetLights(ray, world, random, light);
+                //Vector3 lightAlbedo = GetLights(ray, world, random, light);
                 
                 Vector3 diffuseDirection = record.normal + RandomVector.ReturnHemisphereRandomVector(random, record.normal);// + RandomVector.ReturnRandomNormalizedUnitSphereVector(random);
                 if (CustomVectorMath.NearZero(diffuseDirection))
@@ -112,19 +111,32 @@ namespace Raytracing
                 // default fresnel squared
                 fresnel *= fresnel;
 
+                Vector3 finalColor = Vector3.Zero;
+
                 // diffuse GI pass
-                return (record.hitMat.emission + lightAlbedo + (record.hitMat.albedo * (1 - record.hitMat.metalness))
-                 * 0.5f * (GetRayColor(new CustomRay(record.point + record.normal * 0.01f, diffuseDirection), world, random, depth - 1, light)))
-                // metalness pass
-                 + (record.hitMat.albedo * record.hitMat.metalness)
-                 * GetRayColor(new CustomRay(record.point + record.normal * 0.01f, reflectedDirection), world, random, depth - 1, light)
-                // additive reflectivity pass w basic fresnel
-                 + (1 - record.hitMat.metalness) * (fresnel * (record.hitMat.smoothness * record.hitMat.smoothness))
-                 * GetRayColor(new CustomRay(record.point + record.normal * 0.01f, reflectedDirection), world, random, depth - 1, light);
+                finalColor = (record.hitMat.emission + (record.hitMat.albedo * (1 - record.hitMat.metalness))
+                    * 0.5f * (GetRayColor(new CustomRay(record.point + record.normal * 0.01f, diffuseDirection), world, random, depth - 1, light)))
+                    // metalness pass
+                    + (record.hitMat.albedo * record.hitMat.metalness)
+                    * GetRayColor(new CustomRay(record.point + record.normal * 0.01f, reflectedDirection), world, random, depth - 1, light)
+                    // additive reflectivity pass w basic fresnel
+                    + (1 - record.hitMat.metalness) * (fresnel * (record.hitMat.smoothness * record.hitMat.smoothness))
+                    * GetRayColor(new CustomRay(record.point + record.normal * 0.01f, reflectedDirection), world, random, depth - 1, light)
+                    // point light pass
+                    + GetLights(ray, world, random, light);
+
+                
+                // clamp return value to reduce noise
+                float clampValue = 1.2f;
+                finalColor.X = Math.Clamp(finalColor.X, 0, clampValue);
+                finalColor.Y = Math.Clamp(finalColor.Y, 0, clampValue);
+                finalColor.Z = Math.Clamp(finalColor.Z, 0, clampValue);
+
+                return finalColor;
             }
             float t = 0.5f * (direction.Y + 1);
-            return t * new Vector3(1f, 0.5f, 0f) + (1 - t) * new Vector3(0.15f, 0.05f, 0.025f);
-            //return t * Vector3.Zero;
+            return t * new Vector3(0.08f, 0.08f, 0.2f) + (1 - t) * new Vector3(0.025f, 0.025f, 0.1f);
+            //return t * new Vector3(0.15f,0.01f,0.01f);
         }
 
         public static Vector3 GetLights(CustomRay ray, Surface world, Random random, Light light)

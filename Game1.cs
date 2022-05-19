@@ -2,6 +2,9 @@
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using System;
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
 using Raytracing;
 using PixelManagement;
 using MiscFunctions;
@@ -16,9 +19,11 @@ namespace simpleRaytracer
         // the screen buffers
         Texture2D buffer1;
 
-        // screen width and height + screen buffer array
+        // screen width and height + screen buffer array, global tick
         int width;
         int height;
+        int globalWidth;
+        int globalHeight;
         Color[] buffer1Data;
 
         // aspect ratio
@@ -33,19 +38,23 @@ namespace simpleRaytracer
 
 
         // define how many samples to cast per pixel, and how deep each recursive child ray can go
-        int samples = 200;
-        int maxDepth = 6;
+        int samples = 40;
+        int maxDepth = 4;
         Random random = new Random();
-
-        // global y for incremental update version of program
-        int y = 0;
 
         // variables for mixing buffer at the end of render
         bool justSorted = false;
         bool blurOutput = true;
-        int blurPasses = 4;
+        int blurPasses = 1;
         float blurWeight = 1f; //0.15f;
         //float contrastWeight = 0.125f;
+        float speckleThreshold = 200;
+
+        // threads
+        Thread[] threadArray;
+        List<Color[]> bufferList = new List<Color[]>();
+        int numberOfAvailableThreads;
+        bool isDone = false;
 
 
         public Game1()
@@ -58,30 +67,47 @@ namespace simpleRaytracer
         protected override void Initialize()
         {
             // set timestep and stuff, for unlocked update
-            _graphics.SynchronizeWithVerticalRetrace = false;
+            _graphics.SynchronizeWithVerticalRetrace = true;
             IsFixedTimeStep = false;
+
             
             // set width and height based on window size
+            //_graphics.PreferredBackBufferWidth = GraphicsDevice.DisplayMode.Width;
+            //_graphics.PreferredBackBufferHeight = GraphicsDevice.DisplayMode.Height;
+            //_graphics.IsFullScreen = true;
+            _graphics.PreferredBackBufferWidth = 960;
+            _graphics.PreferredBackBufferHeight = 540;
+            _graphics.ApplyChanges();
+
             width = Window.ClientBounds.Width;
             height = Window.ClientBounds.Height;
+            globalWidth = width;
+            globalHeight = height;
             aspectRatio = (float)width / (float)height;
+
+            // prepare for threading
+            numberOfAvailableThreads = Environment.ProcessorCount;
+            threadArray = new Thread[numberOfAvailableThreads];
             
             // initialize the camera
             camera = new Camera(new Vector3(0,0,0), new Vector3(0,0,1f), 1.5f, 2, aspectRatio);
 
             // define materials
-            Material mat1 = new Material(new Vector3(0.2f, 0.8f, 0.6f), 0f, 0.95f, Vector3.Zero);
-            Material mat2 = new Material(new Vector3(0.5f, 0.15f, 0.5f), 1f, 0.55f, Vector3.Zero);
-            Material mat3 = new Material(new Vector3(0.28f, 0.15f, 0.05f), 0f, 0f, Vector3.Zero);
+            Material mat1 = new Material(new Vector3(0.2f, 0.2f, 1f), 0f, 0.945f, Vector3.Zero);
+            Material mat2 = new Material(new Vector3(1f, 0.65f, 0f), 1f, 0.45f, Vector3.Zero);
+            Material mat3 = new Material(new Vector3(1f, 1f, 1f), 0f, 0.1f, Vector3.Zero);
+            Material mat4 = new Material(new Vector3(0,0,0), 0, 1f, new Vector3(3f,3f,6f));
 
             // initialize surfaces
-            world.surfaces.Add(new Sphere(new Vector3(1f, -0.45f, -3f), 1.2f, mat1));
+            world.surfaces.Add(new Sphere(new Vector3(2.05f, 0f, -7.25f), 3.5f, mat1));
             world.surfaces.Add(new Sphere(new Vector3(-4.5f, 2f, -8f), 2.3f, mat2));
             world.surfaces.Add(new Sphere(new Vector3(0,45,-20f), 42.5f, mat3));
+            world.surfaces.Add(new Sphere(new Vector3(-1.2f,3.75f,-7.5f), 0.5f, mat4));
 
-            lights.lights.Add(new PointLight(new Vector3(6f, -6f, 5f), 0.35f));
-            lights.lights.Add(new PointLight(new Vector3(0.95f, -8f, -10f), 0.075f));
-            lights.lights.Add(new PointLight(new Vector3(-3f, 5f, -0.5f), 0.15f));
+            lights.lights.Add(new PointLight(new Vector3(6f, 2f, 3f), 10f, new Vector3(1.25f,0,0)));
+            lights.lights.Add(new PointLight(new Vector3(0f, 0f, -12f), 1.5f));
+            lights.lights.Add(new PointLight(new Vector3(-3f, 5f, -0.5f), 4.5f, new Vector3(0,1.25f,0)));
+            lights.lights.Add(new PointLight(new Vector3(0f,-8f,0f), 16f));
 
             base.Initialize();
         }
@@ -93,135 +119,83 @@ namespace simpleRaytracer
             // create array and texture to blit colours into
             buffer1 = new Texture2D(GraphicsDevice, width, height);
             buffer1Data = new Color[width * height];
-
-            // disabled to move this into update loop for "dynamic" visual refresh
-            /*
-            // iterate through scanlines
-            for (int y = 0; y < height; y++)
-            {
-                // print which scanline is currently being evaluated
-                Console.WriteLine("Scanlines remaining: " + (height - y));
-
-                // iterate through x on scanline
-                for (int x = 0; x < width; x++)
-                {
-                    // create the color variable for the ray
-                    Color rayColor;
-                    Vector3 vectorRayColor = Vector3.Zero;
-                    
-                    // get the coordinates on the camera viewport, and cast a ray through it, jittering by a random number
-                    for (int i = 0; i < samples; i++)
-                    {
-                        float u = (float)(x + (float)random.Next(0,100) / 100) / width;
-                        float v = (float)(y + (float)random.Next(0,100) / 100) / height;
-
-                        // create the ray
-                        CustomRay ray = new CustomRay(camera.position, camera.lowerLeftCorner + u * camera.horizontal + v * camera.vertical - camera.position);
-
-                        // intersect ray against bg and objects
-                        //Vector3 vectorColor = RayOperations.GetRayNormalColor(ray, world);
-                        //Vector3 vectorColor = RayOperations.GetRayDepthColor(ray, world);
-                        Vector3 vectorColor1 = RayOperations.GetRayColor(ray, world, random, maxDepth);
-                        
-                        vectorRayColor += vectorColor1;
-                    }
-
-                    // write the ray color to the pixel
-                    vectorRayColor /= samples;
-                    // gamma correction
-                    vectorRayColor.X = (float)Math.Sqrt(vectorRayColor.X);
-                    vectorRayColor.Y = (float)Math.Sqrt(vectorRayColor.Y);
-                    vectorRayColor.Z = (float)Math.Sqrt(vectorRayColor.Z);
-
-                    rayColor = new Color(vectorRayColor.X, vectorRayColor.Y, vectorRayColor.Z);
-                    PixelOperations.WritePixel(buffer1Data, x, y, width, rayColor);
-                }
-            }
             
-            // print if successful
-            Console.WriteLine("Done!");
-            // update the texture with the buffer array
-            buffer1.SetData<Color>(buffer1Data);
-
-            // print aspect ratio; for testing and debug
-            //Console.WriteLine(aspectRatio);
+            // thread testing
+            /* technique 1 (split screen into sections)
+                if (numberOfAvailableThreads > 1)
+                {
+                    Parallel.For(0, numberOfAvailableThreads, startThread);
+                    //{
+                        //threadArray[i] = new Thread(() => renderBlock(width, (height / (numberOfAvailableThreads-1)) * (i-1), (height / (numberOfAvailableThreads-1)) * (i-2), i - 1, new Random()));
+                        //threadArray[i].Start();
+                    //}
+                }
+                else
+                {
+                    threadArray[0] = new Thread(() => renderBlock(width, height, 0, 1, random));
+                    threadArray[0].Start();
+                }
             */
 
+            // technique 2 (render whole screen numerous times into separate buffers w diff random seed, combine at end)
+            Parallel.For(0, numberOfAvailableThreads, startThreadFull);
         }
 
         protected override void Update(GameTime gameTime)
         {
             if (GamePad.GetState(PlayerIndex.One).Buttons.Back == ButtonState.Pressed || Keyboard.GetState().IsKeyDown(Keys.Escape))
-                Exit();
-
-            // iterate through scanlines
-            if (y < height)
             {
-                // print which scanline is currently being evaluated
-                 Console.WriteLine("Scanlines remaining: " + (height - y));
+                for (int i = 0; i < threadArray.Length; i++)
+                    threadArray[i].Abort();
+            }
 
-                // iterate through x on scanline
-                for (int x = 0; x < width; x++)
+            bool stillRunning = false;
+            for (int i = 0; i < threadArray.Length; i++)
+            {
+                stillRunning = threadArray[i].IsAlive;
+                if (stillRunning)
                 {
-                    // create the color variable for the ray
-                    Color rayColor;
-                    Vector3 vectorRayColor = Vector3.Zero;
-                    
-                    // get the coordinates on the camera viewport, and cast a ray through it, jittering by a random number
-                    for (int i = 0; i < samples; i++)
-                    {
-                        float u = (float)(x + (float)random.Next(0,100) / 100) / width;
-                        float v = (float)(y + (float)random.Next(0,100) / 100) / height;
-
-                        // create the ray
-                        CustomRay ray = new CustomRay(camera.position, camera.lowerLeftCorner + u * camera.horizontal + v * camera.vertical - camera.position);
-
-                        // intersect ray against bg and objects
-                        //Vector3 vectorColor1 = RayOperations.GetRayNormalColor(ray, world);
-                        //Vector3 vectorColor1 = RayOperations.GetRayDepthColor(ray, world);
-                        //Vector3 vectorColor1 = RayOperations.GetLights(ray, world, random, lights);
-                        Vector3 vectorColor1 = RayOperations.GetRayColor(ray, world, random, maxDepth, lights);
-                        
-                        vectorRayColor += vectorColor1 / samples;
-                    }
-
-                    // write the ray color to the pixel
-                    //vectorRayColor /= samples;
-                    // gamma correction
-                    vectorRayColor.X = (float)Math.Sqrt(vectorRayColor.X);
-                    vectorRayColor.Y = (float)Math.Sqrt(vectorRayColor.Y);
-                    vectorRayColor.Z = (float)Math.Sqrt(vectorRayColor.Z);
-
-                    rayColor = new Color(vectorRayColor.X, vectorRayColor.Y, vectorRayColor.Z);
-                    PixelOperations.WritePixel(buffer1Data, x, y, width, rayColor);
-                }
-                // increment global y
-                y += 1;
-
-                // update the texture with the buffer array
-                buffer1.SetData<Color>(buffer1Data);
-                
-                // say if done
-                if (y >= height)
-                {
-                    Console.WriteLine("Done!");
-                    Console.WriteLine("Render took " + gameTime.TotalGameTime + ".");
-
-                    if (!justSorted && blurOutput)
-                    {
-                        for (int i = 0; i < blurPasses; i++)
-                        {
-                            buffer1Data = Sorting.Despeckle(buffer1Data, width, height, blurWeight);
-                            buffer1.SetData<Color>(buffer1Data);
-                            Console.WriteLine("Completed despeckle pass #" + (i + 1) + ".");
-                        }
-
-                        justSorted = true;
-                        if (blurPasses > 0)
-                            Console.WriteLine("Despeckled output image.");
-                    }
+                    // update the texture with the buffer array (old)
+                    buffer1.SetData<Color>(bufferList[0]);
+                    return;
                 }
             }
+            
+            if (!stillRunning && !isDone)
+            {
+                Console.WriteLine("Done!");
+                Console.WriteLine("Render took " + gameTime.TotalGameTime + ".");
+                isDone = true;
+
+                // update texture w all buffers (new!)
+                foreach (Color[] buffer in bufferList)
+                {
+                    for (int y = 0; y < globalHeight; y++)
+                        for (int x = 0; x < globalWidth; x++)
+                        {
+                            Vector3 tempBuffCol = buffer1Data[x + (y * width)].ToVector3();
+                            Vector3 currBuffCol = buffer[x + (y * width)].ToVector3();
+                            Vector3 newBuffCol = (tempBuffCol / 2) + (currBuffCol / 2);
+                            buffer1Data[x + (y * width)] = new Color(newBuffCol.X, newBuffCol.Y, newBuffCol.Z);
+                        }
+                }
+                buffer1.SetData<Color>(buffer1Data);
+            }
+
+            if (!justSorted && blurOutput && isDone)
+            {
+                for (int i = 0; i < blurPasses; i++)
+                {
+                    buffer1Data = Sorting.Despeckle(buffer1Data, width, height, blurWeight, speckleThreshold);
+                    buffer1.SetData<Color>(buffer1Data);
+                    Console.WriteLine("Completed despeckle pass #" + (i + 1) + ".");
+                }
+
+                justSorted = true;
+                if (blurPasses > 0)
+                    Console.WriteLine("Despeckled output image.");
+            }
+
 
             base.Update(gameTime);
         }
@@ -236,6 +210,132 @@ namespace simpleRaytracer
             spriteBatch.End();
 
             base.Draw(gameTime);
+        }
+        
+        // render block function for threading; probably split this out later
+        void renderBlock(int width, int height, int y, int threadNumber, Random random)
+        {
+            // iterate through scanlines
+            while (y < height)
+            {
+                // print which scanline is currently being evaluated
+                Console.WriteLine("Scanlines remaining on Thread " + threadNumber + ": " + (height - y));
+
+                // iterate through x on scanline
+                for(int x = 0; x < width; x++)
+                {
+                    // create the color variable for the ray
+                    Color rayColor;
+                    Vector3 vectorRayColor = Vector3.Zero;
+
+                    // get the coordinates on the camera viewport, and cast a ray through it, jittering by a random number
+                    for (int i = 0; i < samples; i++)
+                    {
+                        float u = (float)(x + (float)random.Next(0, 100) / 100) / globalWidth;
+                        float v = (float)(y + (float)random.Next(0, 100) / 100) / globalHeight;
+
+                        // create the ray
+                        CustomRay ray = new CustomRay(camera.position, camera.lowerLeftCorner + u * camera.horizontal + v * camera.vertical - camera.position);
+
+                        // intersect ray against bg and objects
+                        //Vector3 vectorColor1 = RayOperations.GetRayNormalColor(ray, world);
+                        //Vector3 vectorColor1 = RayOperations.GetRayDepthColor(ray, world);
+                        //Vector3 vectorColor1 = RayOperations.GetLights(ray, world, random, lights);
+                        Vector3 vectorColor1 = RayOperations.GetRayColor(ray, world, random, maxDepth, lights);
+
+                        vectorRayColor += vectorColor1 / samples;
+                    }
+
+                    // write the ray color to the pixel
+                    //vectorRayColor /= samples;
+                    // gamma correction
+                    vectorRayColor.X = (float)Math.Sqrt(vectorRayColor.X);
+                    vectorRayColor.Y = (float)Math.Sqrt(vectorRayColor.Y);
+                    vectorRayColor.Z = (float)Math.Sqrt(vectorRayColor.Z);
+
+                    rayColor = new Color(vectorRayColor.X, vectorRayColor.Y, vectorRayColor.Z);
+                    PixelOperations.WritePixel(buffer1Data, x, y, width, rayColor);
+                }
+                // increment y
+                y++;
+            }
+            
+            if (y >= height)
+            {
+                Console.WriteLine("Thread " + threadNumber + " is done rendering.");
+                Thread.Sleep(0);
+            }
+        }
+
+        // render block function for threading; probably split this out later
+        void renderBlockFull(int width, int height, int threadNumber, Random random, Color[] buffer)
+        {
+            int y =0;
+
+            // iterate through scanlines
+            while (y < height)
+            {
+                // print which scanline is currently being evaluated
+                Console.WriteLine("Scanlines remaining on Thread " + threadNumber + ": " + (height - y));
+
+                // iterate through x on scanline
+                for(int x = 0; x < width; x++)
+                {
+                    // create the color variable for the ray
+                    Color rayColor;
+                    Vector3 vectorRayColor = Vector3.Zero;
+
+                    // get the coordinates on the camera viewport, and cast a ray through it, jittering by a random number
+                    for (int i = 0; i < samples; i++)
+                    {
+                        float u = (float)(x + (float)random.Next(0, 100) / 100) / globalWidth;
+                        float v = (float)(y + (float)random.Next(0, 100) / 100) / globalHeight;
+
+                        // create the ray
+                        CustomRay ray = new CustomRay(camera.position, camera.lowerLeftCorner + u * camera.horizontal + v * camera.vertical - camera.position);
+
+                        // intersect ray against bg and objects
+                        //Vector3 vectorColor1 = RayOperations.GetRayNormalColor(ray, world);
+                        //Vector3 vectorColor1 = RayOperations.GetRayDepthColor(ray, world);
+                        //Vector3 vectorColor1 = RayOperations.GetLights(ray, world, random, lights);
+                        Vector3 vectorColor1 = RayOperations.GetRayColor(ray, world, random, maxDepth, lights);
+
+                        vectorRayColor += vectorColor1 / samples;
+                    }
+
+                    // write the ray color to the pixel
+                    //vectorRayColor /= samples;
+                    // gamma correction
+                    vectorRayColor.X = (float)Math.Sqrt(vectorRayColor.X);
+                    vectorRayColor.Y = (float)Math.Sqrt(vectorRayColor.Y);
+                    vectorRayColor.Z = (float)Math.Sqrt(vectorRayColor.Z);
+
+                    rayColor = new Color(vectorRayColor.X, vectorRayColor.Y, vectorRayColor.Z);
+                    PixelOperations.WritePixel(buffer, x, y, width, rayColor);
+                }
+                // increment y
+                y++;
+            }
+            
+            if (y >= height)
+            {
+                Console.WriteLine("Thread " + threadNumber + " is done rendering.");
+                Thread.Sleep(0);
+            }
+        }
+
+        void startThread(int i)
+        {
+            threadArray[i] = new Thread(() => renderBlock(width, (height / (numberOfAvailableThreads)) * (i+1), (height / (numberOfAvailableThreads)) * (i), i + 1, new Random()));
+            threadArray[i].Start();
+        }
+
+        void startThreadFull(int i)
+        {
+            Color[] newBuffer = new Color[globalWidth * globalHeight];
+            bufferList.Add(newBuffer);
+            threadArray[i] = new Thread(() => renderBlockFull(globalWidth, globalHeight, i, new Random(), newBuffer));
+            threadArray[i].Start();
         }
     }
 }

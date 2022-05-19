@@ -63,6 +63,19 @@ namespace Raytracing
         {
             position = inputOrigin;
             brightness = inputBrightness;
+            lightColor = Vector3.Zero;
+        }
+
+        public PointLight(Vector3 inputOrigin, float inputBrightness, Vector3 inputColor)
+        {
+            position = inputOrigin;
+            brightness = inputBrightness;
+            lightColor = inputColor;
+
+            float biggestColor1 = Math.Max(lightColor.X, lightColor.Y);
+            float biggestColor2 = Math.Max(lightColor.Y, lightColor.Z);
+            float biggestColor3 = Math.Max(biggestColor1, biggestColor2);
+            if (biggestColor3 != 0 && biggestColor3 >= 1) brightness /= biggestColor3;
         }
 
         public override Vector3 calculateLight(Vector3 formerLightLevel, CustomRay ray, Surface world, hitRecord record, Random random, bool blinnPhong)
@@ -70,18 +83,19 @@ namespace Raytracing
             // get roughness for specular calculation
             float roughness = 1 - record.hitMat.smoothness;
             float roughSqr = roughness * roughness;
+            float geoShadow = 1;
+            float attenuation = Math.Clamp(1 / Vector3.DistanceSquared(record.point, position), 0, 1);
             
             // direction to light
-            Vector3 directionToLight = Vector3.Normalize((position - record.point) + (RandomVector.ReturnRandomRangedVector(random, 0.9f)));
-
-            float attenuation = Vector3.DistanceSquared(position, record.point) / 100;
+            Vector3 directionToLight = Vector3.Normalize((position - record.point));
 
             Vector3 halfAngle = Vector3.Normalize(directionToLight + Vector3.Normalize(-ray.direction));
             
-            float NdotL = /*Math.Clamp(*/Vector3.Dot(record.normal, directionToLight);//, 0, 1);
-            float NdotV = /*Math.Clamp(*/Vector3.Dot(record.normal, Vector3.Normalize(-ray.direction));//, 0, 1);
-            float LdotH = /*Math.Clamp(*/Vector3.Dot(directionToLight, halfAngle);//, 0, 1);
-            float NdotH = /*Math.Clamp(*/Vector3.Dot(record.normal, halfAngle);//, 0, 1);
+            float VdotH = Vector3.Dot(-ray.direction, halfAngle);
+            float NdotL = Vector3.Dot(record.normal, directionToLight);//, 0, 1);
+            float NdotV = Vector3.Dot(record.normal, Vector3.Normalize(-ray.direction));//, 0, 1);
+            float LdotH = Vector3.Dot(directionToLight, halfAngle);//, 0, 1);
+            float NdotH = Vector3.Dot(record.normal, halfAngle);//, 0, 1);
             float NdotHSqr = NdotH * NdotH;
             float tanNdotHSqr = (1 - NdotHSqr) / NdotHSqr;
 
@@ -90,6 +104,12 @@ namespace Raytracing
 
             if (!blinnPhong)
             {
+                float NdotLSqr = NdotL * NdotL;
+                float NdotVSqr = NdotV * NdotV;
+                float SmithL = 2 / (1 + (float)Math.Sqrt(1 + roughSqr * (1 - NdotLSqr) / NdotLSqr));
+                float SmithV = 2 / (1 + (float)Math.Sqrt(1 + roughSqr * (1 - NdotVSqr) / NdotVSqr));
+                geoShadow = SmithL * SmithV;
+                
                 float F, D, vis;
 
                 // D
@@ -109,22 +129,33 @@ namespace Raytracing
 
                 ggx = NdotL * D * F * vis;
                 ggx *= brightness;
-                ggx *= (record.hitMat.smoothness * record.hitMat.smoothness);
+                //ggx *= (record.hitMat.smoothness * record.hitMat.smoothness);
             }
             else
             {
+                float NdotLSqr = NdotL * NdotL;
+                float NdotVSqr = NdotV * NdotV;
+                float calcL = (NdotL)/(roughSqr * (float)Math.Sqrt(1 - NdotLSqr));
+                float calcV = (NdotV)/(roughSqr * (float)Math.Sqrt(1 - NdotVSqr));
+                float SmithL = calcL < 1.6 ? (((3.535f * calcL) + (2.181f * calcL * calcL)) / (1 + (2.276f * calcL) + (2.577f * calcL * calcL))) : 1;
+                float SmithV = calcV < 1.6 ? (((3.535f * calcV) + (2.181f * calcV * calcV)) / (1 + (2.276f * calcV) + (2.577f * calcV * calcV))) : 1;
+                geoShadow = SmithL * SmithV;
+                
                 blinn = Vector3.Dot(record.normal, halfAngle);
                 blinn = Math.Clamp(blinn, 0, 1);
                 blinn = NdotL != 0 ? blinn : 0;
                 blinn = (float)Math.Pow(blinn, ((record.hitMat.smoothness * record.hitMat.smoothness) * 200));
                 blinn *= (record.hitMat.smoothness * record.hitMat.smoothness) + 0.001f;
-                blinn *= brightness * 1.5f;
+                //blinn *= brightness * 1.5f;
             }
 
-            Vector3 lightLevel = formerLightLevel + ((record.hitMat.albedo * (1 - record.hitMat.metalness) * brightness) * NdotL * attenuation);
+            Vector3 lightAlbedo;
+            lightAlbedo = (record.hitMat.albedo + lightColor);
+
+            Vector3 lightLevel = formerLightLevel + ((lightAlbedo * (1 - record.hitMat.metalness)) * (NdotL*NdotV) * geoShadow * brightness * attenuation);
 
             // point light pass
-            if (world.hit(new CustomRay(record.point, directionToLight), 0.001f, float.PositiveInfinity, record))
+            if (world.hit(new CustomRay(record.point, directionToLight + RandomVector.ReturnRandomRangedVector(random, 0.975f)), 0.001f, float.PositiveInfinity, record))
                 if (CustomVectorMath.Magnitude(new CustomRay(record.point, directionToLight).getPos(record.t) - record.point) < CustomVectorMath.Magnitude(position - record.point))
                 {
                     lightLevel = formerLightLevel;
@@ -135,13 +166,14 @@ namespace Raytracing
                 }
 
             if (!blinnPhong)
-                return lightLevel + ((Vector3.Lerp(new Vector3(1, 1, 1), record.hitMat.albedo, record.hitMat.metalness) / (float)Math.PI) * ggx * attenuation);
+                return lightLevel + ((Vector3.Lerp(new Vector3(1,1,1) + lightColor, lightAlbedo, record.hitMat.metalness) / (float)Math.PI) * ggx * attenuation);
             else 
-                return lightLevel + (Vector3.Lerp(new Vector3(1, 1, 1), record.hitMat.albedo, record.hitMat.metalness) * blinn * attenuation);
+                return lightLevel + (Vector3.Lerp(new Vector3(1,1,1) + lightColor, lightAlbedo, record.hitMat.metalness) * blinn * attenuation);
         }
 
         public Vector3 position;
         public float brightness;
+        public Vector3 lightColor;
     }
 
     public class LightList : Light
