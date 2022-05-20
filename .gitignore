@@ -1,6 +1,5 @@
 # ignore user renders
-renders
+*.png
 
-# ignore unused content stuff
-Content
+# ignore unused stuff
 .vs

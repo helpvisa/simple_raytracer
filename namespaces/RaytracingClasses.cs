@@ -138,7 +138,7 @@ namespace Raytracing
                 vis = (1f / (NdotL * (1f - k) + k)) * (1f / (NdotV * (1f - k) + k));
 
                 ggx = NdotL * D * F * vis;
-                //ggx *= (brightness / 2);
+                ggx *= (brightness / 2);
                 //ggx *= (record.hitMat.smoothness * record.hitMat.smoothness);
             }
             else
@@ -156,7 +156,7 @@ namespace Raytracing
                 blinn = NdotL != 0 ? blinn : 0;
                 blinn = (float)Math.Pow(blinn, ((record.hitMat.smoothness * record.hitMat.smoothness) * 200));
                 blinn *= (record.hitMat.smoothness * record.hitMat.smoothness) + 0.001f;
-                //blinn *= (brightness);
+                blinn *= (brightness);
             }
 
             Vector3 lightAlbedo;
@@ -262,17 +262,16 @@ namespace Raytracing
 
         public override bool hit(CustomRay ray, float t_min, float t_max, hitRecord record)
         {
-            hitRecord tempRecord = record;
             bool hitAnything = false;
             float closestSoFar = t_max;
 
             foreach (Surface surface in surfaces)
             {
-                if (surface.hit(ray, t_min, closestSoFar, tempRecord))
+                if (surface.hit(ray, t_min, closestSoFar, record))
                 {
                     hitAnything = true;
-                    closestSoFar = tempRecord.t;
-                    record = tempRecord;
+                    if (record.t < closestSoFar)
+                        closestSoFar = record.t;
                 }
             }
 
@@ -324,23 +323,8 @@ namespace Raytracing
         public float radius;
         public Material material;
     }
-
-    // data class for storing data about hit points
-    public class hitRecord
-    {
-        public Vector3 point;
-        public Vector3 normal;
-        public float t;
-        public bool frontFace;
-        public Material hitMat;
-
-        public void setFaceNormal(CustomRay ray, Vector3 outwardNormal)
-        {
-            frontFace = Vector3.Dot(ray.direction, outwardNormal) < 0;
-            normal = frontFace ? outwardNormal : -outwardNormal;
-        }
-    }
-
+    
+    // axis aligned rectangle
     public class RectAxis : Surface
     {
         public RectAxis(float inX1, float inX2, float inY1, float inY2, float inK, Material inputMat)
@@ -364,6 +348,9 @@ namespace Raytracing
             if (x < x1 || x > x2 || y < y1 || y > y2)
                 return false;
             
+            if (t < 0)
+                return false;
+            
             record.t = t;
             Vector3 outwardNormal = new Vector3(0, 0, 1);
             record.setFaceNormal(ray, outwardNormal);
@@ -378,5 +365,130 @@ namespace Raytracing
         float y2;
         float k;
         Material material;
+    }
+
+    // basic triangle intersection utilizing the mt algorithm
+    public class Tri : Surface
+    {
+        public Tri(Vert v0, Vert v1, Vert v2, Material inputMat, bool inFlip, bool blendNormals)
+        {
+            vertA = v0.position;
+            vertB = v1.position;
+            vertC = v2.position;
+            vANorm = v0.normal;
+            vBNorm = v1.normal;
+            vCNorm = v2.normal;
+            flipNormal = inFlip;
+            blend = blendNormals;
+            material = inputMat;
+        }
+
+        public Tri(Vert v0, Vert v1, Vert v2, Material inputMat, bool blendNormals)
+        {
+            vertA = v0.position;
+            vertB = v1.position;
+            vertC = v2.position;
+            vANorm = v0.normal;
+            vBNorm = v1.normal;
+            vCNorm = v2.normal;
+            flipNormal = false;
+            blend = blendNormals;
+            material = inputMat;
+        }
+
+        public Tri(Vert v0, Vert v1, Vert v2, Material inputMat)
+        {
+            vertA = v0.position;
+            vertB = v1.position;
+            vertC = v2.position;
+            vANorm = v0.normal;
+            vBNorm = v1.normal;
+            vCNorm = v2.normal;
+            flipNormal = false;
+            blend = true;
+            material = inputMat;
+        }
+        
+        public override bool hit(CustomRay ray, float t_min, float t_max, hitRecord record)
+        {
+            Vector3 AB = vertB - vertA;
+            Vector3 AC = vertC - vertA;
+            Vector3 pVec = Vector3.Cross(ray.direction, AC);
+            float discriminant = Vector3.Dot(AB, pVec);
+
+            if (discriminant < 1e-16 && !flipNormal)
+                return false;
+            else if (discriminant > 1e-16 && flipNormal)
+                return false;
+            
+            if (Math.Abs(discriminant) < 1e-16)
+                return false;
+            
+            float invDisc = 1 / discriminant;
+
+            Vector3 tVec = ray.origin - vertA;
+            float u = Vector3.Dot(tVec, pVec) * invDisc;
+            if (u < 0 || u > 1)
+                return false;
+            
+            Vector3 qVec = Vector3.Cross(tVec, AB);
+            float v = Vector3.Dot(ray.direction, qVec) * invDisc;
+            if (v < 0 || u + v > 1)
+                return false;
+            
+            float t = Vector3.Dot(AC, qVec) * invDisc;
+            if (t < 0)
+                return false;
+            if (t < t_min || t > t_max)
+                return false;
+
+            record.t = t;
+            if (!blend)
+                record.normal = Vector3.Cross(AB, AC);
+            else
+                record.normal = u * vANorm + v * vBNorm + (1 - u - v) * vCNorm;
+            record.frontFace = true;
+            record.hitMat = material;
+            record.point = ray.getPos(t);
+            return true;
+        }
+        
+        Vector3 vertA;
+        Vector3 vertB;
+        Vector3 vertC;
+        Vector3 vANorm;
+        Vector3 vBNorm;
+        Vector3 vCNorm;
+        bool flipNormal;
+        bool blend;
+        Material material;
+    }
+
+    public class Vert
+    {
+        public Vert(Vector3 inPos, Vector3 inNorm)
+        {
+            position = inPos;
+            normal = inNorm;
+        }
+        
+        public Vector3 position;
+        public Vector3 normal;
+    }
+
+    // data class for storing data about hit points
+    public class hitRecord
+    {
+        public Vector3 point;
+        public Vector3 normal;
+        public float t;
+        public bool frontFace;
+        public Material hitMat;
+
+        public void setFaceNormal(CustomRay ray, Vector3 outwardNormal)
+        {
+            frontFace = Vector3.Dot(ray.direction, outwardNormal) < 0;
+            normal = frontFace ? outwardNormal : -outwardNormal;
+        }
     }
 }

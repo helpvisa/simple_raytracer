@@ -39,8 +39,8 @@ namespace simpleRaytracer
 
 
         // define how many samples to cast per pixel, and how deep each recursive child ray can go
-        int samples = 1;
-        int maxDepth = 6;
+        int samples = 50;
+        int maxDepth = 4;
         Random random = new Random();
 
         // variables for mixing buffer at the end of render
@@ -50,6 +50,7 @@ namespace simpleRaytracer
         float blurWeight = 1f; //0.15f;
         //float contrastWeight = 0.125f;
         float speckleThreshold = 200;
+        bool saveImage = true;
 
         // threads
         Thread[] threadArray;
@@ -61,7 +62,7 @@ namespace simpleRaytracer
         public Game1()
         {
             _graphics = new GraphicsDeviceManager(this);
-            //Content.RootDirectory = "Content";
+            Content.RootDirectory = "Content";
             IsMouseVisible = true;
         }
 
@@ -72,12 +73,14 @@ namespace simpleRaytracer
             IsFixedTimeStep = false;
 
             
+
+            
             // set width and height based on window size
             //_graphics.PreferredBackBufferWidth = GraphicsDevice.DisplayMode.Width;
             //_graphics.PreferredBackBufferHeight = GraphicsDevice.DisplayMode.Height;
             //_graphics.IsFullScreen = true;
-            _graphics.PreferredBackBufferWidth = 128;
-            _graphics.PreferredBackBufferHeight = 128;
+            _graphics.PreferredBackBufferWidth = 480;
+            _graphics.PreferredBackBufferHeight = 270;
             _graphics.ApplyChanges();
 
             width = _graphics.PreferredBackBufferWidth;
@@ -93,29 +96,54 @@ namespace simpleRaytracer
             threadArray = new Thread[numberOfAvailableThreads];
             
             // initialize the camera
-            //camera = new Camera(new Vector3(0,1,0), new Vector3(-0.03f, 0.875f, -7.6f), 63, aspectRatio);
-            camera = new Camera(new Vector3(-16.5f,-9.55f,10), new Vector3(-0.8f, 1.25f, -7.6f), 15, aspectRatio);
+            //camera = new Camera(Vector3.Zero, new Vector3(0,0,-1), 65, aspectRatio);
+            //camera = new Camera(new Vector3(0,0,0), new Vector3(-0.03f, 0.875f, -7.6f), 63, aspectRatio);
+            //camera = new Camera(new Vector3(-16.5f,-9.55f,10), new Vector3(-0.8f, 1.25f, -7.6f), 15, aspectRatio);
+            camera = new Camera(new Vector3(-2,-1.2f,2), new Vector3(-1,0,-3), 52, aspectRatio);
 
-            // define materials
-            Material mat1 = new Material(new Vector3(0.2f, 0.2f, 1f), 0f, 0.945f, Vector3.Zero);
+            // define materials //
+            // spheres
+            Material mat1 = new Material(new Vector3(0.2f, 0.2f, 1f), 0f, 0.965f, Vector3.Zero);
             Material mat2 = new Material(new Vector3(1f, 0.65f, 0f), 1f, 0.65f, Vector3.Zero);
             Material mat3 = new Material(new Vector3(1f, 1f, 1f), 0f, 0.15f, Vector3.Zero);
+            // emissives
             Material mat4 = new Material(new Vector3(0,0,0), 0, 0f, new Vector3(25f,0.5f,0.5f));
             Material mat5 = new Material(new Vector3(0,0,0), 0, 0f, new Vector3(0.5f,0.5f,25f));
+            // tris
+            Material mat6 = new Material(new Vector3(1f,0f,0f), 1f, 0.35f, Vector3.Zero);
 
             // initialize surfaces
             world.surfaces.Add(new Sphere(new Vector3(2.05f, 0.9f, -7.25f), 3.5f, mat1));
             world.surfaces.Add(new Sphere(new Vector3(-4.5f, 2f, -8f), 2.3f, mat2));
             world.surfaces.Add(new Sphere(new Vector3(0,45,-20f), 42.5f, mat3));
-            world.surfaces.Add(new Sphere(new Vector3(-1.2f,3.75f,-7.5f), 0.5f, mat5));
+            //world.surfaces.Add(new Sphere(new Vector3(-1.5f,3.75f,-7.5f), 0.5f, mat5));
 
-            // rect testing
-            world.surfaces.Add(new RectAxis(-6, -3, -4, 4, -20, mat4));
+            // rect testing //
+            //world.surfaces.Add(new RectAxis(-6, -3, -4, 4, -20, mat4));
 
-            lights.lights.Add(new PointLight(new Vector3(6f, 2f, 3f), 1f, new Vector3(1.25f,0,0)));
-            lights.lights.Add(new PointLight(new Vector3(0f, 0f, -12f), 0.25f));
-            lights.lights.Add(new PointLight(new Vector3(-3f, 5f, -0.5f), 1.5f, new Vector3(0,1.25f,0)));
-            lights.lights.Add(new PointLight(new Vector3(0f,-8f,0f), 4f));
+            // tri testing //
+            // create verts
+            Vert v0 = new Vert(new Vector3(0, 0,-3), Vector3.Normalize(new Vector3(0,0,1)));
+            Vert v1 = new Vert(new Vector3(-3,0,-6), Vector3.Normalize(new Vector3(-1,0,0)));
+            Vert v2 = new Vert(new Vector3(0,0,-9), Vector3.Normalize(new Vector3(0,0,-1)));
+            Vert v3 = new Vert(new Vector3(3,0,-6), Vector3.Normalize(new Vector3(1,0,0)));
+            Vert v4 = new Vert(new Vector3(0,-3,-6), Vector3.Normalize(new Vector3(0,-1,0)));
+            Vert v5 = new Vert(new Vector3(0,3,-6), Vector3.Normalize(new Vector3(0,1,0)));
+            // create tris
+            world.surfaces.Add(new Tri(v0, v1, v5, mat6, true, false));
+            world.surfaces.Add(new Tri(v0, v1, v4, mat6, false));
+            world.surfaces.Add(new Tri(v0, v3, v5, mat6, false));
+            world.surfaces.Add(new Tri(v0, v3, v4, mat6, true, false));
+            world.surfaces.Add(new Tri(v2, v1, v5, mat6, false));
+            world.surfaces.Add(new Tri(v2, v1, v4, mat6, true, false));
+            world.surfaces.Add(new Tri(v2, v3, v5, mat6, true, false));
+            world.surfaces.Add(new Tri(v2, v3, v4, mat6, false));
+            
+
+            lights.lights.Add(new PointLight(new Vector3(6f, 2f, 3f), 2f));//, new Vector3(1.25f,0,0)));
+            lights.lights.Add(new PointLight(new Vector3(0f, 0f, -12f), 0.5f));
+            lights.lights.Add(new PointLight(new Vector3(-3f, 5f, -0.5f), 0.21f));//, new Vector3(0,1.25f,0)));
+            lights.lights.Add(new PointLight(new Vector3(0f,-8f,0f), 0.8f));
 
             base.Initialize();
         }
@@ -204,9 +232,12 @@ namespace simpleRaytracer
                 if (blurPasses > 0)
                     Console.WriteLine("Despeckled output image. ");
                 
-                var stream = new FileStream("renders/" + DateTime.Now.ToString("hh/mm/ss/dd/MM/yyyy") + ".png", FileMode.Create);
-                buffer1.SaveAsPng(stream, globalWidth, globalHeight);
-                Console.WriteLine("Saved rendered image to " + stream.Name + ".");
+                if (saveImage)
+                {
+                    var stream = new FileStream("renders/" + DateTime.Now.ToString("hh/mm/ss/dd/MM/yyyy") + ".png", FileMode.Create);
+                    buffer1.SaveAsPng(stream, globalWidth, globalHeight);
+                    Console.WriteLine("Saved rendered image to " + stream.Name + ".");
+                }
             }
 
 

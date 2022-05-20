@@ -82,7 +82,7 @@ namespace Raytracing
                 return Vector3.Zero;
 
             // if object is hit
-            if (world.hit(ray, 0.01f, float.PositiveInfinity, record))
+            if (world.hit(ray, 0.001f, float.PositiveInfinity, record))
             {
                 if (depth < record.hitMat.maxDepth)
                 {
@@ -115,13 +115,13 @@ namespace Raytracing
 
                 // diffuse GI pass
                 finalColor = (record.hitMat.emission + (record.hitMat.albedo * (1 - record.hitMat.metalness))
-                    * 0.5f * (GetRayColor(new CustomRay(record.point + record.normal * 0.01f, diffuseDirection), world, random, depth - 1, light)))
+                    * 0.5f * (GetRayColor(new CustomRay(record.point, diffuseDirection), world, random, depth - 1, light)))
                     // metalness pass
                     + (record.hitMat.albedo * record.hitMat.metalness)
-                    * GetRayColor(new CustomRay(record.point + record.normal * 0.01f, reflectedDirection), world, random, depth - 1, light)
+                    * GetRayColor(new CustomRay(record.point, reflectedDirection), world, random, depth - 1, light)
                     // additive reflectivity pass w basic fresnel
                     + (1 - record.hitMat.metalness) * (fresnel * (record.hitMat.smoothness * record.hitMat.smoothness))
-                    * GetRayColor(new CustomRay(record.point + record.normal * 0.01f, reflectedDirection), world, random, depth - 1, light)
+                    * GetRayColor(new CustomRay(record.point, reflectedDirection), world, random, depth - 1, light)
                     // point light pass
                     + GetLights(ray, world, random, light);
 
@@ -135,8 +135,8 @@ namespace Raytracing
                 return finalColor;
             }
             float t = 0.5f * (direction.Y + 1);
-            //return t * new Vector3(0.08f, 0.08f, 0.2f) + (1 - t) * new Vector3(0.025f, 0.025f, 0.1f);
-            return t * new Vector3(0f,0f,0f);
+            return t * new Vector3(0.08f, 0.08f, 0.2f) + (1 - t) * new Vector3(0.025f, 0.025f, 0.1f);
+            //return t * new Vector3(0f,0f,0f);
         }
 
         public static Vector3 GetLights(CustomRay ray, Surface world, Random random, Light light)
