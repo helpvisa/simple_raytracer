@@ -82,7 +82,7 @@ namespace Raytracing
                 return Vector3.Zero;
 
             // if object is hit
-            if (world.hit(ray, 0.01f, 150f, record))
+            if (world.hit(ray, 0.01f, float.PositiveInfinity, record))
             {
                 if (depth < record.hitMat.maxDepth)
                 {
@@ -135,8 +135,8 @@ namespace Raytracing
                 return finalColor;
             }
             float t = 0.5f * (direction.Y + 1);
-            return t * new Vector3(0.08f, 0.08f, 0.2f) + (1 - t) * new Vector3(0.025f, 0.025f, 0.1f);
-            //return t * new Vector3(0.15f,0.01f,0.01f);
+            //return t * new Vector3(0.08f, 0.08f, 0.2f) + (1 - t) * new Vector3(0.025f, 0.025f, 0.1f);
+            return t * new Vector3(0f,0f,0f);
         }
 
         public static Vector3 GetLights(CustomRay ray, Surface world, Random random, Light light)

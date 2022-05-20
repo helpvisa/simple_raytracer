@@ -2,6 +2,7 @@
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using System;
+using System.IO;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -38,14 +39,14 @@ namespace simpleRaytracer
 
 
         // define how many samples to cast per pixel, and how deep each recursive child ray can go
-        int samples = 40;
-        int maxDepth = 4;
+        int samples = 1;
+        int maxDepth = 6;
         Random random = new Random();
 
         // variables for mixing buffer at the end of render
         bool justSorted = false;
         bool blurOutput = true;
-        int blurPasses = 1;
+        int blurPasses = 0;
         float blurWeight = 1f; //0.15f;
         //float contrastWeight = 0.125f;
         float speckleThreshold = 200;
@@ -60,7 +61,7 @@ namespace simpleRaytracer
         public Game1()
         {
             _graphics = new GraphicsDeviceManager(this);
-            Content.RootDirectory = "Content";
+            //Content.RootDirectory = "Content";
             IsMouseVisible = true;
         }
 
@@ -75,39 +76,46 @@ namespace simpleRaytracer
             //_graphics.PreferredBackBufferWidth = GraphicsDevice.DisplayMode.Width;
             //_graphics.PreferredBackBufferHeight = GraphicsDevice.DisplayMode.Height;
             //_graphics.IsFullScreen = true;
-            _graphics.PreferredBackBufferWidth = 960;
-            _graphics.PreferredBackBufferHeight = 540;
+            _graphics.PreferredBackBufferWidth = 128;
+            _graphics.PreferredBackBufferHeight = 128;
             _graphics.ApplyChanges();
 
-            width = Window.ClientBounds.Width;
-            height = Window.ClientBounds.Height;
+            width = _graphics.PreferredBackBufferWidth;
+            height = _graphics.PreferredBackBufferHeight;
             globalWidth = width;
             globalHeight = height;
             aspectRatio = (float)width / (float)height;
 
             // prepare for threading
-            numberOfAvailableThreads = Environment.ProcessorCount;
+            numberOfAvailableThreads = Environment.ProcessorCount - 1;
+            if (numberOfAvailableThreads < 1)
+                numberOfAvailableThreads = 1;
             threadArray = new Thread[numberOfAvailableThreads];
             
             // initialize the camera
-            camera = new Camera(new Vector3(0,0,0), new Vector3(0,0,1f), 1.5f, 2, aspectRatio);
+            //camera = new Camera(new Vector3(0,1,0), new Vector3(-0.03f, 0.875f, -7.6f), 63, aspectRatio);
+            camera = new Camera(new Vector3(-16.5f,-9.55f,10), new Vector3(-0.8f, 1.25f, -7.6f), 15, aspectRatio);
 
             // define materials
             Material mat1 = new Material(new Vector3(0.2f, 0.2f, 1f), 0f, 0.945f, Vector3.Zero);
-            Material mat2 = new Material(new Vector3(1f, 0.65f, 0f), 1f, 0.45f, Vector3.Zero);
-            Material mat3 = new Material(new Vector3(1f, 1f, 1f), 0f, 0.1f, Vector3.Zero);
-            Material mat4 = new Material(new Vector3(0,0,0), 0, 1f, new Vector3(3f,3f,6f));
+            Material mat2 = new Material(new Vector3(1f, 0.65f, 0f), 1f, 0.65f, Vector3.Zero);
+            Material mat3 = new Material(new Vector3(1f, 1f, 1f), 0f, 0.15f, Vector3.Zero);
+            Material mat4 = new Material(new Vector3(0,0,0), 0, 0f, new Vector3(25f,0.5f,0.5f));
+            Material mat5 = new Material(new Vector3(0,0,0), 0, 0f, new Vector3(0.5f,0.5f,25f));
 
             // initialize surfaces
-            world.surfaces.Add(new Sphere(new Vector3(2.05f, 0f, -7.25f), 3.5f, mat1));
+            world.surfaces.Add(new Sphere(new Vector3(2.05f, 0.9f, -7.25f), 3.5f, mat1));
             world.surfaces.Add(new Sphere(new Vector3(-4.5f, 2f, -8f), 2.3f, mat2));
             world.surfaces.Add(new Sphere(new Vector3(0,45,-20f), 42.5f, mat3));
-            world.surfaces.Add(new Sphere(new Vector3(-1.2f,3.75f,-7.5f), 0.5f, mat4));
+            world.surfaces.Add(new Sphere(new Vector3(-1.2f,3.75f,-7.5f), 0.5f, mat5));
 
-            lights.lights.Add(new PointLight(new Vector3(6f, 2f, 3f), 10f, new Vector3(1.25f,0,0)));
-            lights.lights.Add(new PointLight(new Vector3(0f, 0f, -12f), 1.5f));
-            lights.lights.Add(new PointLight(new Vector3(-3f, 5f, -0.5f), 4.5f, new Vector3(0,1.25f,0)));
-            lights.lights.Add(new PointLight(new Vector3(0f,-8f,0f), 16f));
+            // rect testing
+            world.surfaces.Add(new RectAxis(-6, -3, -4, 4, -20, mat4));
+
+            lights.lights.Add(new PointLight(new Vector3(6f, 2f, 3f), 1f, new Vector3(1.25f,0,0)));
+            lights.lights.Add(new PointLight(new Vector3(0f, 0f, -12f), 0.25f));
+            lights.lights.Add(new PointLight(new Vector3(-3f, 5f, -0.5f), 1.5f, new Vector3(0,1.25f,0)));
+            lights.lights.Add(new PointLight(new Vector3(0f,-8f,0f), 4f));
 
             base.Initialize();
         }
@@ -180,6 +188,7 @@ namespace simpleRaytracer
                         }
                 }
                 buffer1.SetData<Color>(buffer1Data);
+                Console.Write("Mixed threaded buffers. ");
             }
 
             if (!justSorted && blurOutput && isDone)
@@ -193,7 +202,11 @@ namespace simpleRaytracer
 
                 justSorted = true;
                 if (blurPasses > 0)
-                    Console.WriteLine("Despeckled output image.");
+                    Console.WriteLine("Despeckled output image. ");
+                
+                var stream = new FileStream("renders/" + DateTime.Now.ToString("hh/mm/ss/dd/MM/yyyy") + ".png", FileMode.Create);
+                buffer1.SaveAsPng(stream, globalWidth, globalHeight);
+                Console.WriteLine("Saved rendered image to " + stream.Name + ".");
             }
 
 
@@ -291,8 +304,8 @@ namespace simpleRaytracer
                         float u = (float)(x + (float)random.Next(0, 100) / 100) / globalWidth;
                         float v = (float)(y + (float)random.Next(0, 100) / 100) / globalHeight;
 
-                        // create the ray
-                        CustomRay ray = new CustomRay(camera.position, camera.lowerLeftCorner + u * camera.horizontal + v * camera.vertical - camera.position);
+                        // create the ray (flat projection)
+                        CustomRay ray = camera.returnRay(u, v);
 
                         // intersect ray against bg and objects
                         //Vector3 vectorColor1 = RayOperations.GetRayNormalColor(ray, world);
@@ -334,7 +347,7 @@ namespace simpleRaytracer
         {
             Color[] newBuffer = new Color[globalWidth * globalHeight];
             bufferList.Add(newBuffer);
-            threadArray[i] = new Thread(() => renderBlockFull(globalWidth, globalHeight, i, new Random(), newBuffer));
+            threadArray[i] = new Thread(() => renderBlockFull(globalWidth, globalHeight, i + 1, new Random(), newBuffer));
             threadArray[i].Start();
         }
     }

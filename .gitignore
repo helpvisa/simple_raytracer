@@ -1,0 +1,8 @@
+# ignore user renders
+renders
+
+# ignore unused content stuff
+Content
+obj
+bin
+.vs

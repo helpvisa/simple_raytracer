@@ -26,21 +26,31 @@ namespace Raytracing
     // class used to define the camera object
     public class Camera
     {
-        public Camera(Vector3 inputOrigin, Vector3 inputDirection, float inputFocal, float height, float ratio)
+        public Camera(Vector3 inputOrigin, Vector3 lookAt, float inFov, float ratio)
         {
             position = inputOrigin;
-            direction = Vector3.Normalize(inputDirection);
-            focalLength = inputFocal;
-            viewportHeight = height;
+
+            float theta = MathHelper.ToRadians(inFov);
+            float h = (float)Math.Tan(theta / 2);
+            viewportHeight = 2f * h;
             viewportWidth = viewportHeight * ratio;
-            horizontal = new Vector3(viewportWidth, 0, 0);
-            vertical = new Vector3(0, viewportHeight, 0);
-            lowerLeftCorner = position - horizontal/2 - vertical/2 - direction * focalLength;
+
+            Vector3 w = Vector3.Normalize(position - lookAt);
+            Vector3 u = Vector3.Normalize(Vector3.Cross(Vector3.Up, w));
+            Vector3 v = Vector3.Cross(w, u);
+
+            horizontal = viewportWidth * u;
+            vertical = viewportHeight * v;
+            lowerLeftCorner = position - horizontal/2 - vertical/2 - w;
+        }
+
+        public CustomRay returnRay(float u, float v)
+        {
+            return new CustomRay(position, (lowerLeftCorner + u * horizontal + v * vertical) - position);
         }
 
         public Vector3 position;
-        public Vector3 direction;
-        public float focalLength;
+        public float vFov;
         float viewportHeight;
         float viewportWidth;
         public Vector3 horizontal;
@@ -91,11 +101,11 @@ namespace Raytracing
 
             Vector3 halfAngle = Vector3.Normalize(directionToLight + Vector3.Normalize(-ray.direction));
             
-            float VdotH = Vector3.Dot(-ray.direction, halfAngle);
-            float NdotL = Vector3.Dot(record.normal, directionToLight);//, 0, 1);
-            float NdotV = Vector3.Dot(record.normal, Vector3.Normalize(-ray.direction));//, 0, 1);
-            float LdotH = Vector3.Dot(directionToLight, halfAngle);//, 0, 1);
-            float NdotH = Vector3.Dot(record.normal, halfAngle);//, 0, 1);
+            float VdotH = Math.Clamp(Vector3.Dot(-ray.direction, halfAngle), 0, 1);
+            float NdotL = Math.Clamp(Vector3.Dot(record.normal, directionToLight), 0, 1);
+            float NdotV = Math.Clamp(Vector3.Dot(record.normal, Vector3.Normalize(-ray.direction)), 0, 1);
+            float LdotH = Math.Clamp(Vector3.Dot(directionToLight, halfAngle), 0, 1);
+            float NdotH = Math.Clamp(Vector3.Dot(record.normal, halfAngle), 0, 1);
             float NdotHSqr = NdotH * NdotH;
             float tanNdotHSqr = (1 - NdotHSqr) / NdotHSqr;
 
@@ -128,7 +138,7 @@ namespace Raytracing
                 vis = (1f / (NdotL * (1f - k) + k)) * (1f / (NdotV * (1f - k) + k));
 
                 ggx = NdotL * D * F * vis;
-                ggx *= brightness;
+                //ggx *= (brightness / 2);
                 //ggx *= (record.hitMat.smoothness * record.hitMat.smoothness);
             }
             else
@@ -146,7 +156,7 @@ namespace Raytracing
                 blinn = NdotL != 0 ? blinn : 0;
                 blinn = (float)Math.Pow(blinn, ((record.hitMat.smoothness * record.hitMat.smoothness) * 200));
                 blinn *= (record.hitMat.smoothness * record.hitMat.smoothness) + 0.001f;
-                //blinn *= brightness * 1.5f;
+                //blinn *= (brightness);
             }
 
             Vector3 lightAlbedo;
@@ -184,7 +194,7 @@ namespace Raytracing
         {
             foreach (Light light in lights)
             {
-                if (world.hit(ray, 0.001f, 150f, record))
+                if (world.hit(ray, 0.001f, float.PositiveInfinity, record))
                 {
                     formerLightLevel += light.calculateLight(formerLightLevel, ray, world, record, random, blinnPhong);
                 }
@@ -329,5 +339,44 @@ namespace Raytracing
             frontFace = Vector3.Dot(ray.direction, outwardNormal) < 0;
             normal = frontFace ? outwardNormal : -outwardNormal;
         }
+    }
+
+    public class RectAxis : Surface
+    {
+        public RectAxis(float inX1, float inX2, float inY1, float inY2, float inK, Material inputMat)
+        {
+            x1 = inX1;
+            x2 = inX2;
+            y1 = inY1;
+            y2 = inY2;
+            k = inK;
+            material = inputMat;
+        }
+
+        public override bool hit(CustomRay ray, float t_min, float t_max, hitRecord record)
+        {
+            float t = (-k - ray.origin.Z / ray.direction.Z);
+            if (t < t_min || t > t_max)
+                return false;
+            
+            float x = ray.origin.X + (t * ray.direction.X);
+            float y = ray.origin.Y + (t * ray.direction.Y);
+            if (x < x1 || x > x2 || y < y1 || y > y2)
+                return false;
+            
+            record.t = t;
+            Vector3 outwardNormal = new Vector3(0, 0, 1);
+            record.setFaceNormal(ray, outwardNormal);
+            record.hitMat = material;
+            record.point = ray.getPos(t);
+            return true;
+        }
+
+        float x1;
+        float x2;
+        float y1;
+        float y2;
+        float k;
+        Material material;
     }
 }
