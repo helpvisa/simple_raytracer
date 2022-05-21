@@ -127,7 +127,7 @@ namespace Raytracing
 
                 
                 // clamp return value to reduce noise
-                float clampValue = 1.2f;
+                float clampValue = 1.8f;
                 finalColor.X = Math.Clamp(finalColor.X, 0, clampValue);
                 finalColor.Y = Math.Clamp(finalColor.Y, 0, clampValue);
                 finalColor.Z = Math.Clamp(finalColor.Z, 0, clampValue);

@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using Raytracing;
 using PixelManagement;
 using MiscFunctions;
+using ModelLoader;
 
 namespace simpleRaytracer
 {
@@ -39,7 +40,7 @@ namespace simpleRaytracer
 
 
         // define how many samples to cast per pixel, and how deep each recursive child ray can go
-        int samples = 50;
+        int samples = 4;
         int maxDepth = 4;
         Random random = new Random();
 
@@ -71,16 +72,13 @@ namespace simpleRaytracer
             // set timestep and stuff, for unlocked update
             _graphics.SynchronizeWithVerticalRetrace = true;
             IsFixedTimeStep = false;
-
-            
-
             
             // set width and height based on window size
             //_graphics.PreferredBackBufferWidth = GraphicsDevice.DisplayMode.Width;
             //_graphics.PreferredBackBufferHeight = GraphicsDevice.DisplayMode.Height;
             //_graphics.IsFullScreen = true;
-            _graphics.PreferredBackBufferWidth = 480;
-            _graphics.PreferredBackBufferHeight = 270;
+            _graphics.PreferredBackBufferWidth = 320;
+            _graphics.PreferredBackBufferHeight = 180;
             _graphics.ApplyChanges();
 
             width = _graphics.PreferredBackBufferWidth;
@@ -95,40 +93,44 @@ namespace simpleRaytracer
                 numberOfAvailableThreads = 1;
             threadArray = new Thread[numberOfAvailableThreads];
             
+            // load 3d models
+            Assimp.Scene teapot = ModelOperations.LoadModel("Content/models/teapot.dae");
+            
             // initialize the camera
             //camera = new Camera(Vector3.Zero, new Vector3(0,0,-1), 65, aspectRatio);
             //camera = new Camera(new Vector3(0,0,0), new Vector3(-0.03f, 0.875f, -7.6f), 63, aspectRatio);
             //camera = new Camera(new Vector3(-16.5f,-9.55f,10), new Vector3(-0.8f, 1.25f, -7.6f), 15, aspectRatio);
-            camera = new Camera(new Vector3(-2,-1.2f,2), new Vector3(-1,0,-3), 52, aspectRatio);
+            camera = new Camera(new Vector3(-2,-1.2f,2), new Vector3(-1,0,-3), 32, aspectRatio);
 
             // define materials //
             // spheres
-            Material mat1 = new Material(new Vector3(0.2f, 0.2f, 1f), 0f, 0.965f, Vector3.Zero);
+            Material mat1 = new Material(new Vector3(0.2f, 0.2f, 1f), 0f, 0.995f, Vector3.Zero);
             Material mat2 = new Material(new Vector3(1f, 0.65f, 0f), 1f, 0.65f, Vector3.Zero);
             Material mat3 = new Material(new Vector3(1f, 1f, 1f), 0f, 0.15f, Vector3.Zero);
             // emissives
-            Material mat4 = new Material(new Vector3(0,0,0), 0, 0f, new Vector3(25f,0.5f,0.5f));
-            Material mat5 = new Material(new Vector3(0,0,0), 0, 0f, new Vector3(0.5f,0.5f,25f));
+            Material mat4 = new Material(new Vector3(0,0,0), 0, 0f, new Vector3(50f,0.5f,0.5f));
+            Material mat5 = new Material(new Vector3(0,0,0), 0, 0f, new Vector3(0.5f,0.5f,50f));
             // tris
-            Material mat6 = new Material(new Vector3(1f,0f,0f), 1f, 0.35f, Vector3.Zero);
+            Material mat6 = new Material(new Vector3(1f,0f,0f), 0f, 0.94f, Vector3.Zero);
 
             // initialize surfaces
-            world.surfaces.Add(new Sphere(new Vector3(2.05f, 0.9f, -7.25f), 3.5f, mat1));
-            world.surfaces.Add(new Sphere(new Vector3(-4.5f, 2f, -8f), 2.3f, mat2));
+            //world.surfaces.Add(new Sphere(new Vector3(2.05f, 0.9f, -7.25f), 3.5f, mat1));
+            //world.surfaces.Add(new Sphere(new Vector3(-4.5f, 2f, -8f), 2.3f, mat2));
             world.surfaces.Add(new Sphere(new Vector3(0,45,-20f), 42.5f, mat3));
-            //world.surfaces.Add(new Sphere(new Vector3(-1.5f,3.75f,-7.5f), 0.5f, mat5));
+            world.surfaces.Add(new Sphere(new Vector3(-2.5f,3.75f,-5.5f), 0.5f, mat5));
 
             // rect testing //
-            //world.surfaces.Add(new RectAxis(-6, -3, -4, 4, -20, mat4));
+            world.surfaces.Add(new RectAxis(-6, -3, -4, 4, -20, mat4));
 
+            /*
             // tri testing //
             // create verts
-            Vert v0 = new Vert(new Vector3(0, 0,-3), Vector3.Normalize(new Vector3(0,0,1)));
-            Vert v1 = new Vert(new Vector3(-3,0,-6), Vector3.Normalize(new Vector3(-1,0,0)));
-            Vert v2 = new Vert(new Vector3(0,0,-9), Vector3.Normalize(new Vector3(0,0,-1)));
-            Vert v3 = new Vert(new Vector3(3,0,-6), Vector3.Normalize(new Vector3(1,0,0)));
-            Vert v4 = new Vert(new Vector3(0,-3,-6), Vector3.Normalize(new Vector3(0,-1,0)));
-            Vert v5 = new Vert(new Vector3(0,3,-6), Vector3.Normalize(new Vector3(0,1,0)));
+            Vert v0 = new Vert(new Vector3(-2, 0,-3), Vector3.Normalize(new Vector3(0,0,1)));
+            Vert v1 = new Vert(new Vector3(-5,0,-6), Vector3.Normalize(new Vector3(-1,0,0)));
+            Vert v2 = new Vert(new Vector3(-2,0,-9), Vector3.Normalize(new Vector3(0,0,-1)));
+            Vert v3 = new Vert(new Vector3(1,0,-6), Vector3.Normalize(new Vector3(1,0,0)));
+            Vert v4 = new Vert(new Vector3(-2,-3,-6), Vector3.Normalize(new Vector3(0,-1,0)));
+            Vert v5 = new Vert(new Vector3(-2,3,-6), Vector3.Normalize(new Vector3(0,1,0)));
             // create tris
             world.surfaces.Add(new Tri(v0, v1, v5, mat6, true, false));
             world.surfaces.Add(new Tri(v0, v1, v4, mat6, false));
@@ -138,12 +140,18 @@ namespace simpleRaytracer
             world.surfaces.Add(new Tri(v2, v1, v4, mat6, true, false));
             world.surfaces.Add(new Tri(v2, v3, v5, mat6, true, false));
             world.surfaces.Add(new Tri(v2, v3, v4, mat6, false));
+            */
+
+            // model testing
+            //ModelOperations.CreateModel(teapot, mat6, world, new Vector3(0,1.4f,-4));
+            ModelOperations.CreateModel(teapot, mat6, world, new Vector3(0,2f,-5));
+            //world.surfaces.Add(new Sphere(new Vector3(0,0,-2), 1f, mat1));
             
 
-            lights.lights.Add(new PointLight(new Vector3(6f, 2f, 3f), 2f));//, new Vector3(1.25f,0,0)));
-            lights.lights.Add(new PointLight(new Vector3(0f, 0f, -12f), 0.5f));
-            lights.lights.Add(new PointLight(new Vector3(-3f, 5f, -0.5f), 0.21f));//, new Vector3(0,1.25f,0)));
-            lights.lights.Add(new PointLight(new Vector3(0f,-8f,0f), 0.8f));
+            lights.lights.Add(new PointLight(new Vector3(6f, 2f, 3f), 5f));//, new Vector3(1.25f,0,0)));
+            lights.lights.Add(new PointLight(new Vector3(0f, 0f, -12f), 2.5f));
+            lights.lights.Add(new PointLight(new Vector3(-3f, 5f, -0.5f), 5f));//, new Vector3(0,1.25f,0)));
+            lights.lights.Add(new PointLight(new Vector3(0f,-8f,0f), 2.5f));
 
             base.Initialize();
         }
@@ -332,8 +340,8 @@ namespace simpleRaytracer
                     // get the coordinates on the camera viewport, and cast a ray through it, jittering by a random number
                     for (int i = 0; i < samples; i++)
                     {
-                        float u = (float)(x + (float)random.Next(0, 100) / 100) / globalWidth;
-                        float v = (float)(y + (float)random.Next(0, 100) / 100) / globalHeight;
+                        float u = (float)(x + (float)random.Next(-50, 50) / 100) / globalWidth;
+                        float v = (float)(y + (float)random.Next(-50, 50) / 100) / globalHeight;
 
                         // create the ray (flat projection)
                         CustomRay ray = camera.returnRay(u, v);

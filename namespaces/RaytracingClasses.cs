@@ -123,7 +123,7 @@ namespace Raytracing
                 float F, D, vis;
 
                 // D
-                float aSqr = roughSqr * roughSqr;
+                float aSqr = roughSqr;// * roughSqr;
                 float pi = (float)Math.PI;
                 float denom = NdotH * NdotH * (aSqr - 1f) + 1f;
                 D = aSqr / (pi * denom * denom);
@@ -156,7 +156,7 @@ namespace Raytracing
                 blinn = NdotL != 0 ? blinn : 0;
                 blinn = (float)Math.Pow(blinn, ((record.hitMat.smoothness * record.hitMat.smoothness) * 200));
                 blinn *= (record.hitMat.smoothness * record.hitMat.smoothness) + 0.001f;
-                blinn *= (brightness);
+                blinn *= brightness;
             }
 
             Vector3 lightAlbedo;
@@ -270,8 +270,7 @@ namespace Raytracing
                 if (surface.hit(ray, t_min, closestSoFar, record))
                 {
                     hitAnything = true;
-                    if (record.t < closestSoFar)
-                        closestSoFar = record.t;
+                    closestSoFar = record.t;
                 }
             }
 
@@ -444,9 +443,19 @@ namespace Raytracing
 
             record.t = t;
             if (!blend)
-                record.normal = Vector3.Cross(AB, AC);
+            {
+                if (!flipNormal)
+                    record.normal = Vector3.Normalize(Vector3.Cross(AB, AC));
+                else
+                    record.normal = -Vector3.Normalize(Vector3.Cross(AB, AC));
+            }
             else
-                record.normal = u * vANorm + v * vBNorm + (1 - u - v) * vCNorm;
+            {
+                if (!flipNormal)
+                    record.normal = Vector3.Barycentric(vANorm, vBNorm, vCNorm, u, v);
+                else
+                    record.normal = -Vector3.Barycentric(vANorm, vBNorm, vCNorm, u, v);
+            }
             record.frontFace = true;
             record.hitMat = material;
             record.point = ray.getPos(t);
