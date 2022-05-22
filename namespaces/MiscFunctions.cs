@@ -1,6 +1,7 @@
 using Microsoft.Xna.Framework;
 using System;
 using System.Collections.Generic;
+using Raytracing;
 
 namespace MiscFunctions
 {   
@@ -67,6 +68,42 @@ namespace MiscFunctions
         public static float Magnitude(Vector3 a)
         {
             return (a.X*a.X+a.Y*a.Y+a.Z*a.Z);
+        }
+    }
+
+    public static class BoundingMath
+    {
+        public static AABB surroundingBox(AABB box0, AABB box1)
+        {
+            Vector3 small = new Vector3(Math.Min(box0.min.X, box1.min.X),
+                                        Math.Min(box0.min.Y, box1.min.Y),
+                                        Math.Min(box0.min.Z, box1.min.Z));
+            Vector3 big = new Vector3(Math.Max(box0.max.X, box1.max.X),
+                                      Math.Max(box0.max.Y, box1.max.Y),
+                                      Math.Max(box0.max.Z, box1.max.Z));
+            
+            return new AABB(big, small);
+        }
+
+        public static bool boxCompare(Surface a, Surface b, int axis)
+        {
+            //AABB box_a = a.bounds;
+            //AABB box_b = b.bounds;
+            Vector3 aCent = a.bounds.min + (a.bounds.min - a.bounds.max / 2);
+            Vector3 bCent = b.bounds.min + (b.bounds.min - b.bounds.max / 2);
+            
+            
+            switch (axis)
+            {
+                case 0:
+                    return aCent.X < bCent.X;
+                case 1:
+                    return aCent.Y < bCent.Y;
+                case 2:
+                    return aCent.Z < bCent.Z;
+                default:
+                    return false;
+            }
         }
     }
 

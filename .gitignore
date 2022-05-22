@@ -1,4 +1,9 @@
-# ignore user renders
+# ignore user renders and models
+models
+*.dae
+*.fbx
+*.obj
+*.gltf
 *.png
 
 *.swp

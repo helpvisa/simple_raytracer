@@ -27,11 +27,11 @@ namespace Raytracing
             if (world.hit(ray, 0, float.PositiveInfinity, record))
             {
                 float value = Vector3.Distance(ray.origin, record.point);
-                return new Vector3(1, 1, 1) - (0.05f * new Vector3(value, value, value));
+                return new Vector3(1, 1, 1) - (0.07f * new Vector3(value, value, value));
             }
             Vector3 direction = Vector3.Normalize(ray.direction);
             float t = 0.5f * (direction.Y + 1);
-            return t * new Vector3(0.2f, 0.2f, 0.2f) + (1 - t) * new Vector3(0.5f, 0.7f, 1);
+            return t * Vector3.Zero;
         }
 
         // get diffuse world render

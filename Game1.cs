@@ -34,14 +34,16 @@ namespace simpleRaytracer
         // create global camera and world, and lights
         Camera camera;
         SurfaceList world = new SurfaceList();
+        BVHNode nodeWorld;
         LightList lights = new LightList();
         //Light mainLight = new PointLight(new Vector3(6f, -6f, 5f), 1f);
         //Light mainLight = new Light(new Vector3(0.95f, -8f, 0f), 1);
 
 
         // define how many samples to cast per pixel, and how deep each recursive child ray can go
-        int samples = 4;
-        int maxDepth = 4;
+        int samples = 12;
+        int maxDepth = 3;
+        int BVH_depth = 1200000;
         Random random = new Random();
 
         // variables for mixing buffer at the end of render
@@ -77,8 +79,8 @@ namespace simpleRaytracer
             //_graphics.PreferredBackBufferWidth = GraphicsDevice.DisplayMode.Width;
             //_graphics.PreferredBackBufferHeight = GraphicsDevice.DisplayMode.Height;
             //_graphics.IsFullScreen = true;
-            _graphics.PreferredBackBufferWidth = 320;
-            _graphics.PreferredBackBufferHeight = 180;
+            _graphics.PreferredBackBufferWidth = 640;
+            _graphics.PreferredBackBufferHeight = 480;
             _graphics.ApplyChanges();
 
             width = _graphics.PreferredBackBufferWidth;
@@ -94,13 +96,13 @@ namespace simpleRaytracer
             threadArray = new Thread[numberOfAvailableThreads];
             
             // load 3d models
-            Assimp.Scene teapot = ModelOperations.LoadModel("Content/models/teapot.dae");
+            Assimp.Scene teapot = ModelOperations.LoadModel("Content/models/scenes/dragon.dae");
             
             // initialize the camera
             //camera = new Camera(Vector3.Zero, new Vector3(0,0,-1), 65, aspectRatio);
             //camera = new Camera(new Vector3(0,0,0), new Vector3(-0.03f, 0.875f, -7.6f), 63, aspectRatio);
             //camera = new Camera(new Vector3(-16.5f,-9.55f,10), new Vector3(-0.8f, 1.25f, -7.6f), 15, aspectRatio);
-            camera = new Camera(new Vector3(-2,-1.2f,2), new Vector3(-1,0,-3), 32, aspectRatio);
+            //camera = new Camera(new Vector3(-2,-1.2f,2), new Vector3(-1,0,-3), 32, aspectRatio);
 
             // define materials //
             // spheres
@@ -111,17 +113,43 @@ namespace simpleRaytracer
             Material mat4 = new Material(new Vector3(0,0,0), 0, 0f, new Vector3(50f,0.5f,0.5f));
             Material mat5 = new Material(new Vector3(0,0,0), 0, 0f, new Vector3(0.5f,0.5f,50f));
             // tris
-            Material mat6 = new Material(new Vector3(1f,0f,0f), 0f, 0.94f, Vector3.Zero);
+            Material mat6 = new Material(new Vector3(1f,0.85f,0.85f), 0f, 0.86f, Vector3.Zero);
+
+            // scene load testing
+            camera = ModelOperations.CreateScene(teapot, mat6, world, lights, aspectRatio);
 
             // initialize surfaces
             //world.surfaces.Add(new Sphere(new Vector3(2.05f, 0.9f, -7.25f), 3.5f, mat1));
             //world.surfaces.Add(new Sphere(new Vector3(-4.5f, 2f, -8f), 2.3f, mat2));
-            world.surfaces.Add(new Sphere(new Vector3(0,45,-20f), 42.5f, mat3));
-            world.surfaces.Add(new Sphere(new Vector3(-2.5f,3.75f,-5.5f), 0.5f, mat5));
+            //world.surfaces.Add(new Sphere(new Vector3(0,45,-20f), 42.5f, mat3));
+            //world.surfaces.Add(new Sphere(new Vector3(-2.5f,3.75f,-5.5f), 0.5f, mat5));
+
+            /*
+            // heavy testing
+            world.surfaces.Add(new Sphere(new Vector3(-4.5f, 2f, -8f), 2.3f, mat2));
+            world.surfaces.Add(new Sphere(new Vector3(-8.5f, -2f, -12f), 2.3f, mat2));
+            world.surfaces.Add(new Sphere(new Vector3(-12.5f, -6f, -16f), 2.3f, mat2));
+            world.surfaces.Add(new Sphere(new Vector3(-16.5f, -10f, -20f), 2.3f, mat2));
+            world.surfaces.Add(new Sphere(new Vector3(-20.5f, -14f, -24f), 2.3f, mat2));
+            world.surfaces.Add(new Sphere(new Vector3(-24.5f, -18f, -28f), 2.3f, mat2));
+            world.surfaces.Add(new Sphere(new Vector3(-28.5f, -22f, -32f), 2.3f, mat2));
+            world.surfaces.Add(new Sphere(new Vector3(-32.5f, -26f, -36f), 2.3f, mat2));
+            world.surfaces.Add(new Sphere(new Vector3(-36.5f, -30f, -40f), 2.3f, mat2));
+            */
 
             // rect testing //
-            world.surfaces.Add(new RectAxis(-6, -3, -4, 4, -20, mat4));
+            //world.surfaces.Add(new RectAxis(-6, -3, -4, 4, -20, mat4));
 
+            // model testing
+            //ModelOperations.CreateModel(teapot, mat6, world, new Vector3(0,1.4f,-4));
+            //ModelOperations.CreateModel(teapot, mat6, world, new Vector3(0,2f,-5));
+            //ModelOperations.CreateModel(teapot, mat6, world, new Vector3(0,0f,-2));
+
+
+            world.Init();
+            nodeWorld = new BVHNode(world, random, BVH_depth);
+
+            
             /*
             // tri testing //
             // create verts
@@ -141,17 +169,12 @@ namespace simpleRaytracer
             world.surfaces.Add(new Tri(v2, v3, v5, mat6, true, false));
             world.surfaces.Add(new Tri(v2, v3, v4, mat6, false));
             */
-
-            // model testing
-            //ModelOperations.CreateModel(teapot, mat6, world, new Vector3(0,1.4f,-4));
-            ModelOperations.CreateModel(teapot, mat6, world, new Vector3(0,2f,-5));
-            //world.surfaces.Add(new Sphere(new Vector3(0,0,-2), 1f, mat1));
             
 
-            lights.lights.Add(new PointLight(new Vector3(6f, 2f, 3f), 5f));//, new Vector3(1.25f,0,0)));
-            lights.lights.Add(new PointLight(new Vector3(0f, 0f, -12f), 2.5f));
-            lights.lights.Add(new PointLight(new Vector3(-3f, 5f, -0.5f), 5f));//, new Vector3(0,1.25f,0)));
-            lights.lights.Add(new PointLight(new Vector3(0f,-8f,0f), 2.5f));
+            //lights.lights.Add(new PointLight(new Vector3(6f, 2f, 3f), 5f));//, new Vector3(1.25f,0,0)));
+            //lights.lights.Add(new PointLight(new Vector3(0f, 0f, -12f), 2.5f));
+            //lights.lights.Add(new PointLight(new Vector3(-3f, 5f, -0.5f), 5f));//, new Vector3(0,1.25f,0)));
+            //lights.lights.Add(new PointLight(new Vector3(0f,-8f,0f), 2.5f));
 
             base.Initialize();
         }
@@ -293,7 +316,7 @@ namespace simpleRaytracer
                         //Vector3 vectorColor1 = RayOperations.GetRayNormalColor(ray, world);
                         //Vector3 vectorColor1 = RayOperations.GetRayDepthColor(ray, world);
                         //Vector3 vectorColor1 = RayOperations.GetLights(ray, world, random, lights);
-                        Vector3 vectorColor1 = RayOperations.GetRayColor(ray, world, random, maxDepth, lights);
+                        Vector3 vectorColor1 = RayOperations.GetRayColor(ray, nodeWorld, random, maxDepth, lights);
 
                         vectorRayColor += vectorColor1 / samples;
                     }
@@ -349,8 +372,8 @@ namespace simpleRaytracer
                         // intersect ray against bg and objects
                         //Vector3 vectorColor1 = RayOperations.GetRayNormalColor(ray, world);
                         //Vector3 vectorColor1 = RayOperations.GetRayDepthColor(ray, world);
-                        //Vector3 vectorColor1 = RayOperations.GetLights(ray, world, random, lights);
-                        Vector3 vectorColor1 = RayOperations.GetRayColor(ray, world, random, maxDepth, lights);
+                        //Vector3 vectorColor1 = RayOperations.GetLights(ray, nodeWorld, random, lights);
+                        Vector3 vectorColor1 = RayOperations.GetRayColor(ray, nodeWorld, random, maxDepth, lights);
 
                         vectorRayColor += vectorColor1 / samples;
                     }

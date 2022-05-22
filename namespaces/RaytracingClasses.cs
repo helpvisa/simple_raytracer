@@ -253,13 +253,29 @@ namespace Raytracing
         {
             return false;
         }
+
+        public virtual bool boundingBox()
+        {
+            return false;
+        }
+
+        public Vector3 center;
+        public AABB bounds;
     }
 
     // stores list of things hit
     public class SurfaceList : Surface
     {
-        public List<Surface> surfaces = new List<Surface>();
+        public void Init()
+        {
+            foreach(Surface surface in surfaces)
+            {
+                surface.boundingBox();
+            }
 
+            boundingBox();
+        }
+        
         public override bool hit(CustomRay ray, float t_min, float t_max, hitRecord record)
         {
             bool hitAnything = false;
@@ -276,6 +292,133 @@ namespace Raytracing
 
             return hitAnything;
         }
+
+        public override bool boundingBox()
+        {
+            if (surfaces.Count == 0)
+                return false;
+            
+            bool firstBox = true;
+            AABB tempBounds = new AABB(Vector3.Zero, Vector3.Zero);
+            foreach (Surface surface in surfaces)
+            {
+                if (!surface.boundingBox())
+                    return false;
+                
+                if (firstBox)
+                    bounds = surface.bounds;
+                else
+                    tempBounds = bounds;
+                    bounds = BoundingMath.surroundingBox(surface.bounds, tempBounds);
+                firstBox = false;
+            }
+            return true;
+        }
+
+        public List<Surface> surfaces = new List<Surface>();
+    }
+
+    public class BVHNode : Surface
+    {
+        public BVHNode(SurfaceList list, Random random, int depth)
+        {
+            int axis = (int)Math.Round((float)random.Next(0,300) / 300);
+            
+            if (list.surfaces.Count == 1)
+            {
+                left = right = list.surfaces[0];
+                bounds = list.surfaces[0].bounds;
+                //bounds = BoundingMath.surroundingBox(bounds, bounds);
+                //Console.WriteLine("New BVH calc bounds are " + bounds.min + " and " + bounds.max);
+            }
+            else if (list.surfaces.Count == 2)
+            {
+                if (BoundingMath.boxCompare(list.surfaces[0], list.surfaces[1], axis))
+                {
+                    left = list.surfaces[1];
+                    right = list.surfaces[0];
+                    bounds = BoundingMath.surroundingBox(right.bounds, left.bounds);
+                    //Console.WriteLine("New BVH calc bounds are " + bounds.min + " and " + bounds.max);
+                }
+                else
+                {
+                    left = list.surfaces[0];
+                    right = list.surfaces[1];
+                    bounds = BoundingMath.surroundingBox(right.bounds, left.bounds);
+                    //Console.WriteLine("New BVH calc bounds are " + bounds.min + " and " + bounds.max);
+                }
+
+            }
+            else
+            {
+                SurfaceList leftList = new SurfaceList();
+                SurfaceList rightList = new SurfaceList();
+
+                for (int i = 0; i < list.surfaces.Count - 1; i++)
+                {
+                    if (BoundingMath.boxCompare(list.surfaces[i], list.surfaces[i + 1], axis))
+                    {
+                        Surface temp = new Surface();
+                        temp = list.surfaces[i];
+                        list.surfaces[i] = list.surfaces[i + 1];
+                        list.surfaces[i + 1] = temp;
+                    }
+                }
+
+                int mid = list.surfaces.Count / 2;
+                for (int l = 0; l < mid; l++)
+                    leftList.surfaces.Add(list.surfaces[l]);
+                for (int r = mid; r < list.surfaces.Count; r++)
+                    rightList.surfaces.Add(list.surfaces[r]);
+                
+                leftList.Init();
+                rightList.Init();
+                if (depth > 1)
+                {
+                    left = new BVHNode(leftList, random, depth - 1);
+                    right = new BVHNode(rightList, random, depth - 1);
+                }
+                else
+                {
+                    left = new SurfaceList();
+                    left = leftList;
+                    right = new SurfaceList();
+                    right = rightList;
+                }
+                bounds = BoundingMath.surroundingBox(right.bounds, left.bounds);
+                //Console.WriteLine("New BVH calc bounds are " + bounds.min + " and " + bounds.max);
+            }
+        }
+        
+        public override bool hit(CustomRay ray, float t_min, float t_max, hitRecord record)
+        {
+            float closest = t_max;
+            float nearest = t_min;
+            if (!bounds.hit(ray, nearest, closest, record))
+                return false;
+            
+            bool hitLeft = false;
+            bool hitRight = false;
+            if (left.hit(ray, nearest, closest, record))
+            {
+                closest = record.closest;
+                nearest = record.nearest;
+                hitLeft = true;
+            }
+            if (right.hit(ray, nearest, closest, record))
+            {
+                closest = record.closest;
+                nearest = record.nearest;
+                hitRight = true;
+            }
+
+
+
+            return hitLeft || hitRight;
+        }
+        
+        public Surface left;
+        public Surface right;
     }
 
     // sphere surface derivative
@@ -284,6 +427,7 @@ namespace Raytracing
         public Sphere(Vector3 inputOrigin, float inputRadius, Material inputMat)
         {
             origin = inputOrigin;
+            center = origin;
             radius = inputRadius;
             material = inputMat;
         }
@@ -318,6 +462,14 @@ namespace Raytracing
             return true;
         }
 
+        public override bool boundingBox()
+        {
+            bounds = new AABB(origin + new Vector3(radius, radius, radius),
+                                origin - new Vector3(radius, radius, radius));
+            Console.WriteLine("Bounds are: " + bounds.min + " to " + bounds.max);
+            return true;
+        }
+
         public Vector3 origin;
         public float radius;
         public Material material;
@@ -333,6 +485,7 @@ namespace Raytracing
             y1 = inY1;
             y2 = inY2;
             k = inK;
+            center = new Vector3((x1 + x2) / 2, (y1 + y2) / 2, k);
             material = inputMat;
         }
 
@@ -452,13 +605,30 @@ namespace Raytracing
             else
             {
                 if (!flipNormal)
-                    record.normal = Vector3.Barycentric(vANorm, vBNorm, vCNorm, u, v);
+                    record.normal = Vector3.Normalize(Vector3.Barycentric(vANorm, vBNorm, vCNorm, u, v));
                 else
-                    record.normal = -Vector3.Barycentric(vANorm, vBNorm, vCNorm, u, v);
+                    record.normal = -Vector3.Normalize(Vector3.Barycentric(vANorm, vBNorm, vCNorm, u, v));
             }
             record.frontFace = true;
             record.hitMat = material;
             record.point = ray.getPos(t);
+            return true;
+        }
+
+        public override bool boundingBox()
+        {
+            Vector3 max = new Vector3();
+            Vector3 min = new Vector3();
+
+            max.X = Math.Max(Math.Max(vertA.X, vertB.X), vertC.X);
+            max.Y = Math.Max(Math.Max(vertA.Y, vertB.Y), vertC.Y);
+            max.Z = Math.Max(Math.Max(vertA.Z, vertB.Z), vertC.Z);
+
+            min.X = Math.Min(Math.Min(vertA.X, vertB.X), vertC.X);
+            min.Y = Math.Min(Math.Min(vertA.Y, vertB.Y), vertC.Y);
+            min.Z = Math.Min(Math.Min(vertA.Z, vertB.Z), vertC.Z);
+            
+            bounds = new AABB(max, min);
             return true;
         }
         
@@ -485,12 +655,125 @@ namespace Raytracing
         public Vector3 normal;
     }
 
+    public class AABB
+    {
+        public AABB(Vector3 inMax, Vector3 inMin)
+        {
+            max = inMax;
+            min = inMin;
+        }
+        
+        public bool hit(CustomRay ray, float t_min, float t_max, hitRecord record)
+        {
+            
+            // needed for approaches 1 and 2
+            /*
+            for (int i = 0; i < 3; i++)
+            {
+                float dimensionMax = 0;
+                float dimensionMin = 0;
+                float dimensionRay = 0;
+                float rayDir = 0;
+                // determine which dimension the loop is checking
+                switch (i)
+                {
+                    case 0:
+                        dimensionMax = max.X;
+                        dimensionMin = min.X;
+                        dimensionRay = ray.origin.X;
+                        rayDir = Vector3.Normalize(ray.direction).X;
+                        break;
+                    case 1:
+                        dimensionMax = max.Y;
+                        dimensionMin = min.Y;
+                        dimensionRay = ray.origin.Y;
+                        rayDir = Vector3.Normalize(ray.direction).Y;
+                        break;
+                    case 2:
+                        dimensionMax = max.Z;
+                        dimensionMin = min.Z;
+                        dimensionRay = ray.origin.Z;
+                        rayDir = Vector3.Normalize(ray.direction).Z;
+                        break;
+                }
+
+                // approach 1
+                /*
+                float t0 = Math.Min((dimensionMin - dimensionRay) / rayDir,
+                                    (dimensionMax - dimensionRay) / rayDir);
+                float t1 = Math.Max((dimensionMin - dimensionRay) / rayDir,
+                                    (dimensionMax - dimensionRay) / rayDir);
+                t_min = Math.Max(t0, t_min);
+                t_max = Math.Min(t1, t_max);
+                if (t_max <= t_min)
+                    return false;
+                */
+                
+                // approach 2
+                /*
+                float invD = 1f / rayDir;
+                
+                float t0 = (dimensionMin - dimensionRay) * invD;
+                float t1 = (dimensionMax - dimensionRay) * invD;
+
+                if (invD < 0)
+                {
+                    float temp_t = t0;
+                    t0 = t1;
+                    t1 = temp_t;
+                }
+
+                t_min = t0 > t_min ? t0 : t_min;
+                t_max = t1 < t_max ? t1 : t_max;
+
+                if (t_max <= t_min)
+                    return false;
+            }
+            return true;
+            */
+
+            // approach 3
+            Vector3 dirFrac = new Vector3();
+            dirFrac.X = 1f / ray.direction.X;
+            dirFrac.Y = 1f / ray.direction.Y;
+            dirFrac.Z = 1f / ray.direction.Z;
+
+            float t1 = (min.X - ray.origin.X) * dirFrac.X;
+            float t2 = (max.X - ray.origin.X) * dirFrac.X;
+            float t3 = (min.Y - ray.origin.Y) * dirFrac.Y;
+            float t4 = (max.Y - ray.origin.Y) * dirFrac.Y;
+            float t5 = (min.Z - ray.origin.Z) * dirFrac.Z;
+            float t6 = (max.Z - ray.origin.Z) * dirFrac.Z;
+
+            t_min = Math.Max(Math.Max(Math.Min(t1, t2), Math.Min(t3,t4)), Math.Min(t5,t6));
+            t_max = Math.Min(Math.Min(Math.Max(t1,t2), Math.Max(t3,t4)), Math.Max(t5,t6));
+
+            if (t_max < 0)
+                return false;
+
+            if (t_min > t_max)
+                return false;
+            
+            //if (record.t > t_min)
+                //return false;
+            
+            record.nearest = t_max;
+            record.closest = t_min;
+            return true;
+        }
+        
+        public Vector3 max;
+        public Vector3 min;
+    }
+
     // data class for storing data about hit points
     public class hitRecord
     {
         public Vector3 point;
         public Vector3 normal;
         public float t;
+        public float nearest;
+        public float closest;
         public bool frontFace;
         public Material hitMat;
 
