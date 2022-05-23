@@ -31,19 +31,23 @@ namespace simpleRaytracer
         // aspect ratio
         float aspectRatio;
 
-        // create global camera and world, and lights
+        // create global camera and world, lights, hitRecord
         Camera camera;
         SurfaceList world = new SurfaceList();
         BVHNode nodeWorld;
         LightList lights = new LightList();
+        hitRecord record = new hitRecord();
         //Light mainLight = new PointLight(new Vector3(6f, -6f, 5f), 1f);
         //Light mainLight = new Light(new Vector3(0.95f, -8f, 0f), 1);
 
+        // create lists to store cached random numbers to avoid generating them in a loop
+        
+
 
         // define how many samples to cast per pixel, and how deep each recursive child ray can go
-        int samples = 12;
-        int maxDepth = 3;
-        int BVH_depth = 1200000;
+        int samples = 10;
+        int maxDepth = 4;
+        float colorClamp = 2.0f;
         Random random = new Random();
 
         // variables for mixing buffer at the end of render
@@ -53,7 +57,7 @@ namespace simpleRaytracer
         float blurWeight = 1f; //0.15f;
         //float contrastWeight = 0.125f;
         float speckleThreshold = 200;
-        bool saveImage = true;
+        bool saveImage = false;
 
         // threads
         Thread[] threadArray;
@@ -80,7 +84,7 @@ namespace simpleRaytracer
             //_graphics.PreferredBackBufferHeight = GraphicsDevice.DisplayMode.Height;
             //_graphics.IsFullScreen = true;
             _graphics.PreferredBackBufferWidth = 640;
-            _graphics.PreferredBackBufferHeight = 480;
+            _graphics.PreferredBackBufferHeight = 360;
             _graphics.ApplyChanges();
 
             width = _graphics.PreferredBackBufferWidth;
@@ -96,7 +100,7 @@ namespace simpleRaytracer
             threadArray = new Thread[numberOfAvailableThreads];
             
             // load 3d models
-            Assimp.Scene teapot = ModelOperations.LoadModel("Content/models/scenes/dragon.dae");
+            Assimp.Scene teapot = ModelOperations.LoadModel("Content/models/scenes/bunny.dae");
             
             // initialize the camera
             //camera = new Camera(Vector3.Zero, new Vector3(0,0,-1), 65, aspectRatio);
@@ -113,7 +117,7 @@ namespace simpleRaytracer
             Material mat4 = new Material(new Vector3(0,0,0), 0, 0f, new Vector3(50f,0.5f,0.5f));
             Material mat5 = new Material(new Vector3(0,0,0), 0, 0f, new Vector3(0.5f,0.5f,50f));
             // tris
-            Material mat6 = new Material(new Vector3(1f,0.85f,0.85f), 0f, 0.86f, Vector3.Zero);
+            Material mat6 = new Material(new Vector3(1f,1f,1f), 0f, 0.5f, Vector3.Zero);
 
             // scene load testing
             camera = ModelOperations.CreateScene(teapot, mat6, world, lights, aspectRatio);
@@ -147,7 +151,7 @@ namespace simpleRaytracer
 
 
             world.Init();
-            nodeWorld = new BVHNode(world, random, BVH_depth);
+            nodeWorld = new BVHNode(world, random, 999999999);
 
             
             /*
@@ -316,7 +320,7 @@ namespace simpleRaytracer
                         //Vector3 vectorColor1 = RayOperations.GetRayNormalColor(ray, world);
                         //Vector3 vectorColor1 = RayOperations.GetRayDepthColor(ray, world);
                         //Vector3 vectorColor1 = RayOperations.GetLights(ray, world, random, lights);
-                        Vector3 vectorColor1 = RayOperations.GetRayColor(ray, nodeWorld, random, maxDepth, lights);
+                        Vector3 vectorColor1 = RayOperations.GetRayColor(ray, nodeWorld, random, maxDepth, lights, record, colorClamp);
 
                         vectorRayColor += vectorColor1 / samples;
                     }
@@ -370,10 +374,10 @@ namespace simpleRaytracer
                         CustomRay ray = camera.returnRay(u, v);
 
                         // intersect ray against bg and objects
-                        //Vector3 vectorColor1 = RayOperations.GetRayNormalColor(ray, world);
+                        //Vector3 vectorColor1 = RayOperations.GetRayNormalColor(ray, nodeWorld);
                         //Vector3 vectorColor1 = RayOperations.GetRayDepthColor(ray, world);
                         //Vector3 vectorColor1 = RayOperations.GetLights(ray, nodeWorld, random, lights);
-                        Vector3 vectorColor1 = RayOperations.GetRayColor(ray, nodeWorld, random, maxDepth, lights);
+                        Vector3 vectorColor1 = RayOperations.GetRayColor(ray, nodeWorld, random, maxDepth, lights, record, colorClamp);
 
                         vectorRayColor += vectorColor1 / samples;
                     }

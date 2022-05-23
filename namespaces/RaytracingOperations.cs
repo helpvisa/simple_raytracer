@@ -72,39 +72,34 @@ namespace Raytracing
             return t * new Vector3(0.85f, 0.75f, 1f) + (1 - t) * new Vector3(1, 1, 1);
         }
 
-        public static Vector3 GetRayColor(CustomRay ray, Surface world, Random random, int depth, Light light)
+        public static Vector3 GetRayColor(CustomRay ray, Surface world, Random random, int depth, Light light, hitRecord record, float clamp)
         {
-            hitRecord record = new hitRecord();
-            Vector3 direction = Vector3.Normalize(ray.direction);
+            Vector3 direction = ray.direction;
 
             // break out if too many rays have already been recursively cast
             if (depth < 1)
                 return Vector3.Zero;
 
             // if object is hit
-            if (world.hit(ray, 0.001f, float.PositiveInfinity, record))
+            if (world.hit(ray, 0.01f, float.PositiveInfinity, record))
             {
-                if (depth < record.hitMat.maxDepth)
-                {
-                    return Vector3.Zero;
-                }
-                
-                // get light + shadow pass
-                //Vector3 lightAlbedo = GetLights(ray, world, random, light);
-                
                 Vector3 diffuseDirection = record.normal + RandomVector.ReturnHemisphereRandomVector(random, record.normal);// + RandomVector.ReturnRandomNormalizedUnitSphereVector(random);
+                /*
                 if (CustomVectorMath.NearZero(diffuseDirection))
                 {
                     diffuseDirection = record.normal;
                     Console.Write("Near Zero!");
                 }
+                */
                 
                 Vector3 reflectedDirection = Vector3.Reflect(direction, record.normal + RandomVector.ReturnRandomRangedVector(random, (float)Math.Sqrt(record.hitMat.smoothness)));
-                if (CustomVectorMath.NearZero(reflectedDirection))
+                
+                /*if (CustomVectorMath.NearZero(reflectedDirection))
                 {
                     reflectedDirection = record.normal;
                     Console.Write("Near Zero!");
                 }
+                */
                 
                 float fresnel = (CustomVectorMath.AngleBetween(direction, reflectedDirection) / 180);
                 
@@ -115,28 +110,27 @@ namespace Raytracing
 
                 // diffuse GI pass
                 finalColor = (record.hitMat.emission + (record.hitMat.albedo * (1 - record.hitMat.metalness))
-                    * 0.5f * (GetRayColor(new CustomRay(record.point, diffuseDirection), world, random, depth - 1, light)))
+                    * 0.5f * (GetRayColor(new CustomRay(record.point, diffuseDirection), world, random, depth - 1, light, record, clamp)))
                     // metalness pass
                     + (record.hitMat.albedo * record.hitMat.metalness)
-                    * GetRayColor(new CustomRay(record.point, reflectedDirection), world, random, depth - 1, light)
+                    * GetRayColor(new CustomRay(record.point, reflectedDirection), world, random, depth - 1, light, record, clamp)
                     // additive reflectivity pass w basic fresnel
                     + (1 - record.hitMat.metalness) * (fresnel * (record.hitMat.smoothness * record.hitMat.smoothness))
-                    * GetRayColor(new CustomRay(record.point, reflectedDirection), world, random, depth - 1, light)
+                    * GetRayColor(new CustomRay(record.point, reflectedDirection), world, random, depth - 1, light, record, clamp)
                     // point light pass
                     + GetLights(ray, world, random, light);
 
                 
                 // clamp return value to reduce noise
-                float clampValue = 1.8f;
-                finalColor.X = Math.Clamp(finalColor.X, 0, clampValue);
-                finalColor.Y = Math.Clamp(finalColor.Y, 0, clampValue);
-                finalColor.Z = Math.Clamp(finalColor.Z, 0, clampValue);
+                finalColor.X = Math.Clamp(finalColor.X, 0, clamp);
+                finalColor.Y = Math.Clamp(finalColor.Y, 0, clamp);
+                finalColor.Z = Math.Clamp(finalColor.Z, 0, clamp);
 
                 return finalColor;
             }
             float t = 0.5f * (direction.Y + 1);
-            return t * new Vector3(0.08f, 0.08f, 0.2f) + (1 - t) * new Vector3(0.025f, 0.025f, 0.1f);
-            //return t * new Vector3(0f,0f,0f);
+            //return t * new Vector3(0.8f, 0.4f, 0.4f) + (1 - t) * new Vector3(0.4f, 0.2f, 0.2f);
+            return t * new Vector3(0f,0f,0f);
         }
 
         public static Vector3 GetLights(CustomRay ray, Surface world, Random random, Light light)

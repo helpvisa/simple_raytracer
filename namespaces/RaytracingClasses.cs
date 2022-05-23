@@ -12,10 +12,15 @@ namespace Raytracing
         {
             origin = inputOrigin;
             direction = Vector3.Normalize(inputDirection);
+
+            dirFrac.X = 1f / direction.X;
+            dirFrac.Y = 1f / direction.Y;
+            dirFrac.Z = 1f / direction.Z;
         }
         
         public Vector3 origin;
         public Vector3 direction;
+        public Vector3 dirFrac;
         
         public Vector3 getPos(float t)
         {
@@ -194,7 +199,7 @@ namespace Raytracing
         {
             foreach (Light light in lights)
             {
-                if (world.hit(ray, 0.001f, float.PositiveInfinity, record))
+                if (world.hit(ray, 0.01f, float.PositiveInfinity, record))
                 {
                     formerLightLevel += light.calculateLight(formerLightLevel, ray, world, record, random, blinnPhong);
                 }
@@ -322,12 +327,24 @@ namespace Raytracing
     {
         public BVHNode(SurfaceList list, Random random, int depth)
         {
-            int axis = (int)Math.Round((float)random.Next(0,300) / 300);
+            int axis; //(int)Math.Round((float)random.Next(0,300) / 300);
+            float sizeX = Math.Abs(list.bounds.max.X - list.bounds.min.X);
+            float sizeY = Math.Abs(list.bounds.max.Y - list.bounds.min.Y);
+            float sizeZ = Math.Abs(list.bounds.max.Z - list.bounds.min.Z);
+
+            if (sizeX > Math.Max(sizeY, sizeZ))
+                axis = 0;
+            else if (sizeY > Math.Max(sizeX, sizeZ))
+                axis = 1;
+            else if (sizeZ > Math.Max(sizeX,sizeY))
+                axis = 2;
+            else
+                axis = 0;
             
             if (list.surfaces.Count == 1)
             {
                 left = right = list.surfaces[0];
-                bounds = list.surfaces[0].bounds;
+                bounds = list.bounds;
                 //bounds = BoundingMath.surroundingBox(bounds, bounds);
                 //Console.WriteLine("New BVH calc bounds are " + bounds.min + " and " + bounds.max);
             }
@@ -373,18 +390,17 @@ namespace Raytracing
                 
                 leftList.Init();
                 rightList.Init();
-                if (depth > 1)
+                if (depth > 0)
                 {
                     left = new BVHNode(leftList, random, depth - 1);
                     right = new BVHNode(rightList, random, depth - 1);
                 }
                 else
                 {
-                    left = new SurfaceList();
                     left = leftList;
-                    right = new SurfaceList();
                     right = rightList;
                 }
+
                 bounds = BoundingMath.surroundingBox(right.bounds, left.bounds);
                 //Console.WriteLine("New BVH calc bounds are " + bounds.min + " and " + bounds.max);
             }
@@ -392,27 +408,15 @@ namespace Raytracing
         
         public override bool hit(CustomRay ray, float t_min, float t_max, hitRecord record)
         {
-            float closest = t_max;
-            float nearest = t_min;
-            if (!bounds.hit(ray, nearest, closest, record))
+            if (!bounds.hit(ray, t_min, t_max, record))
                 return false;
             
             bool hitLeft = false;
             bool hitRight = false;
-            if (left.hit(ray, nearest, closest, record))
-            {
-                closest = record.closest;
-                nearest = record.nearest;
-                hitLeft = true;
-            }
-            if (right.hit(ray, nearest, closest, record))
-            {
-                closest = record.closest;
-                nearest = record.nearest;
-                hitRight = true;
-            }
-
-
+            if (hitLeft = (left.hit(ray, t_min, t_max, record)))
+                t_max = record.t;
+            if(hitRight = (right.hit(ray, t_min, t_max, record)))
+                t_max = record.t;
 
             return hitLeft || hitRight;
         }
@@ -466,7 +470,7 @@ namespace Raytracing
         {
             bounds = new AABB(origin + new Vector3(radius, radius, radius),
                                 origin - new Vector3(radius, radius, radius));
-            Console.WriteLine("Bounds are: " + bounds.min + " to " + bounds.max);
+            //Console.WriteLine("Bounds are: " + bounds.min + " to " + bounds.max);
             return true;
         }
 
@@ -533,6 +537,9 @@ namespace Raytracing
             flipNormal = inFlip;
             blend = blendNormals;
             material = inputMat;
+
+            AB = vertB - vertA;
+            AC = vertC - vertA;
         }
 
         public Tri(Vert v0, Vert v1, Vert v2, Material inputMat, bool blendNormals)
@@ -546,6 +553,9 @@ namespace Raytracing
             flipNormal = false;
             blend = blendNormals;
             material = inputMat;
+
+            AB = vertB - vertA;
+            AC = vertC - vertA;
         }
 
         public Tri(Vert v0, Vert v1, Vert v2, Material inputMat)
@@ -559,21 +569,22 @@ namespace Raytracing
             flipNormal = false;
             blend = true;
             material = inputMat;
+
+            AB = vertB - vertA;
+            AC = vertC - vertA;
         }
         
         public override bool hit(CustomRay ray, float t_min, float t_max, hitRecord record)
         {
-            Vector3 AB = vertB - vertA;
-            Vector3 AC = vertC - vertA;
-            Vector3 pVec = Vector3.Cross(ray.direction, AC);
+            pVec = Vector3.Cross(ray.direction, AC);
             float discriminant = Vector3.Dot(AB, pVec);
 
-            if (discriminant < 1e-16 && !flipNormal)
+            if (discriminant < 1e-8 && !flipNormal)
                 return false;
-            else if (discriminant > 1e-16 && flipNormal)
+            else if (discriminant > 1e-8 && flipNormal)
                 return false;
             
-            if (Math.Abs(discriminant) < 1e-16)
+            if (Math.Abs(discriminant) < 1e-8)
                 return false;
             
             float invDisc = 1 / discriminant;
@@ -641,6 +652,11 @@ namespace Raytracing
         bool flipNormal;
         bool blend;
         Material material;
+
+        // hitcheck variables
+        Vector3 AB;
+        Vector3 AC;
+        Vector3 pVec;
     }
 
     public class Vert
@@ -733,17 +749,13 @@ namespace Raytracing
             */
 
             // approach 3
-            Vector3 dirFrac = new Vector3();
-            dirFrac.X = 1f / ray.direction.X;
-            dirFrac.Y = 1f / ray.direction.Y;
-            dirFrac.Z = 1f / ray.direction.Z;
 
-            float t1 = (min.X - ray.origin.X) * dirFrac.X;
-            float t2 = (max.X - ray.origin.X) * dirFrac.X;
-            float t3 = (min.Y - ray.origin.Y) * dirFrac.Y;
-            float t4 = (max.Y - ray.origin.Y) * dirFrac.Y;
-            float t5 = (min.Z - ray.origin.Z) * dirFrac.Z;
-            float t6 = (max.Z - ray.origin.Z) * dirFrac.Z;
+            float t1 = (min.X - ray.origin.X) * ray.dirFrac.X;
+            float t2 = (max.X - ray.origin.X) * ray.dirFrac.X;
+            float t3 = (min.Y - ray.origin.Y) * ray.dirFrac.Y;
+            float t4 = (max.Y - ray.origin.Y) * ray.dirFrac.Y;
+            float t5 = (min.Z - ray.origin.Z) * ray.dirFrac.Z;
+            float t6 = (max.Z - ray.origin.Z) * ray.dirFrac.Z;
 
             t_min = Math.Max(Math.Max(Math.Min(t1, t2), Math.Min(t3,t4)), Math.Min(t5,t6));
             t_max = Math.Min(Math.Min(Math.Max(t1,t2), Math.Max(t3,t4)), Math.Max(t5,t6));
@@ -754,11 +766,6 @@ namespace Raytracing
             if (t_min > t_max)
                 return false;
             
-            //if (record.t > t_min)
-                //return false;
-            
-            record.nearest = t_max;
-            record.closest = t_min;
             return true;
         }
         
@@ -772,8 +779,6 @@ namespace Raytracing
         public Vector3 point;
         public Vector3 normal;
         public float t;
-        public float nearest;
-        public float closest;
         public bool frontFace;
         public Material hitMat;
 

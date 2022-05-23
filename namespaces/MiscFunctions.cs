@@ -92,7 +92,6 @@ namespace MiscFunctions
             Vector3 aCent = a.bounds.min + (a.bounds.min - a.bounds.max / 2);
             Vector3 bCent = b.bounds.min + (b.bounds.min - b.bounds.max / 2);
             
-            
             switch (axis)
             {
                 case 0:
@@ -104,6 +103,19 @@ namespace MiscFunctions
                 default:
                     return false;
             }
+            /*
+            switch (axis)
+            {
+                case 0:
+                    return box_a.min.X < box_b.min.X;
+                case 1:
+                    return box_a.min.Y < box_b.min.Y;
+                case 2:
+                    return box_a.min.Z < box_b.min.Z;
+                default:
+                    return false;
+            }
+            */
         }
     }
 

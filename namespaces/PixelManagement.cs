@@ -21,5 +21,15 @@ namespace PixelManagement
             
             buffer[x + (y * width)] = color;
         }
+
+        public static void WriteVector(Vector3[] buffer, int x, int y, int width, Vector3 input)
+        {
+            buffer[x + (y * width)] = input;
+        }
+
+        public static Vector3 PullVector(Vector3[] buffer, int x, int y, int width)
+        {
+            return buffer[x + (y * width)];
+        }
     }
 }
