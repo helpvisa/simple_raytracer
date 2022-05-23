@@ -76,7 +76,6 @@ namespace ModelLoader
                 List<Vert> vertexBuffer = new List<Vert>();
                 List<Face> faces = mesh.Faces;
                 List<Vector3D> vertexList = mesh.Vertices;
-                Console.WriteLine(faces.Count);
                 List<Vector3D> normalList = mesh.Normals;
 
                 for(int i = 0; i < vertexList.Count; i++)
@@ -91,7 +90,6 @@ namespace ModelLoader
                     List<int> indices = face.Indices;
                     world.surfaces.Add(new Tri(vertexBuffer[indices[0]], vertexBuffer[indices[1]], vertexBuffer[indices[2]], inMat, false, true));
                 }
-                //Console.Write(vertexBuffer.Count);
             }
 
             // load lights

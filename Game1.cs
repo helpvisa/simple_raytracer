@@ -31,23 +31,16 @@ namespace simpleRaytracer
         // aspect ratio
         float aspectRatio;
 
-        // create global camera and world, lights, hitRecord
+        // create global camera and world
         Camera camera;
         SurfaceList world = new SurfaceList();
         BVHNode nodeWorld;
         LightList lights = new LightList();
-        hitRecord record = new hitRecord();
-        //Light mainLight = new PointLight(new Vector3(6f, -6f, 5f), 1f);
-        //Light mainLight = new Light(new Vector3(0.95f, -8f, 0f), 1);
-
-        // create lists to store cached random numbers to avoid generating them in a loop
-        
-
 
         // define how many samples to cast per pixel, and how deep each recursive child ray can go
-        int samples = 10;
+        int samples = 46;
         int maxDepth = 4;
-        float colorClamp = 2.0f;
+        float colorClamp = 1f;
         Random random = new Random();
 
         // variables for mixing buffer at the end of render
@@ -60,6 +53,7 @@ namespace simpleRaytracer
         bool saveImage = false;
 
         // threads
+        bool mixBufferTechnique = false;
         Thread[] threadArray;
         List<Color[]> bufferList = new List<Color[]>();
         int numberOfAvailableThreads;
@@ -79,12 +73,9 @@ namespace simpleRaytracer
             _graphics.SynchronizeWithVerticalRetrace = true;
             IsFixedTimeStep = false;
             
-            // set width and height based on window size
-            //_graphics.PreferredBackBufferWidth = GraphicsDevice.DisplayMode.Width;
-            //_graphics.PreferredBackBufferHeight = GraphicsDevice.DisplayMode.Height;
-            //_graphics.IsFullScreen = true;
-            _graphics.PreferredBackBufferWidth = 640;
-            _graphics.PreferredBackBufferHeight = 360;
+            // set width and height
+            _graphics.PreferredBackBufferWidth = 960;
+            _graphics.PreferredBackBufferHeight = 540;
             _graphics.ApplyChanges();
 
             width = _graphics.PreferredBackBufferWidth;
@@ -94,18 +85,20 @@ namespace simpleRaytracer
             aspectRatio = (float)width / (float)height;
 
             // prepare for threading
-            numberOfAvailableThreads = Environment.ProcessorCount - 1;
-            if (numberOfAvailableThreads < 1)
+            numberOfAvailableThreads = Environment.ProcessorCount;
+            if (numberOfAvailableThreads < 1) // failsafe
                 numberOfAvailableThreads = 1;
             threadArray = new Thread[numberOfAvailableThreads];
             
             // load 3d models
-            Assimp.Scene teapot = ModelOperations.LoadModel("Content/models/scenes/bunny.dae");
+            //Assimp.Scene teapot = ModelOperations.LoadModel("Content/models/scenes/dragon.dae");
+            // scene load testing
+            //camera = ModelOperations.CreateScene(teapot, mat6, world, lights, aspectRatio);
             
             // initialize the camera
             //camera = new Camera(Vector3.Zero, new Vector3(0,0,-1), 65, aspectRatio);
             //camera = new Camera(new Vector3(0,0,0), new Vector3(-0.03f, 0.875f, -7.6f), 63, aspectRatio);
-            //camera = new Camera(new Vector3(-16.5f,-9.55f,10), new Vector3(-0.8f, 1.25f, -7.6f), 15, aspectRatio);
+            camera = new Camera(new Vector3(-16.5f,-9.55f,10), new Vector3(-0.8f, 1.25f, -7.6f), 15, aspectRatio);
             //camera = new Camera(new Vector3(-2,-1.2f,2), new Vector3(-1,0,-3), 32, aspectRatio);
 
             // define materials //
@@ -117,68 +110,34 @@ namespace simpleRaytracer
             Material mat4 = new Material(new Vector3(0,0,0), 0, 0f, new Vector3(50f,0.5f,0.5f));
             Material mat5 = new Material(new Vector3(0,0,0), 0, 0f, new Vector3(0.5f,0.5f,50f));
             // tris
-            Material mat6 = new Material(new Vector3(1f,1f,1f), 0f, 0.5f, Vector3.Zero);
+            Material mat6 = new Material(new Vector3(1f,1f,1f), 1f, 0.935f, Vector3.Zero);
 
-            // scene load testing
-            camera = ModelOperations.CreateScene(teapot, mat6, world, lights, aspectRatio);
-
-            // initialize surfaces
-            //world.surfaces.Add(new Sphere(new Vector3(2.05f, 0.9f, -7.25f), 3.5f, mat1));
-            //world.surfaces.Add(new Sphere(new Vector3(-4.5f, 2f, -8f), 2.3f, mat2));
-            //world.surfaces.Add(new Sphere(new Vector3(0,45,-20f), 42.5f, mat3));
-            //world.surfaces.Add(new Sphere(new Vector3(-2.5f,3.75f,-5.5f), 0.5f, mat5));
-
-            /*
-            // heavy testing
+            /* sphere testing
+            world.surfaces.Add(new Sphere(new Vector3(2.05f, 0.9f, -7.25f), 3.5f, mat1));
             world.surfaces.Add(new Sphere(new Vector3(-4.5f, 2f, -8f), 2.3f, mat2));
-            world.surfaces.Add(new Sphere(new Vector3(-8.5f, -2f, -12f), 2.3f, mat2));
-            world.surfaces.Add(new Sphere(new Vector3(-12.5f, -6f, -16f), 2.3f, mat2));
-            world.surfaces.Add(new Sphere(new Vector3(-16.5f, -10f, -20f), 2.3f, mat2));
-            world.surfaces.Add(new Sphere(new Vector3(-20.5f, -14f, -24f), 2.3f, mat2));
-            world.surfaces.Add(new Sphere(new Vector3(-24.5f, -18f, -28f), 2.3f, mat2));
-            world.surfaces.Add(new Sphere(new Vector3(-28.5f, -22f, -32f), 2.3f, mat2));
-            world.surfaces.Add(new Sphere(new Vector3(-32.5f, -26f, -36f), 2.3f, mat2));
-            world.surfaces.Add(new Sphere(new Vector3(-36.5f, -30f, -40f), 2.3f, mat2));
+            world.surfaces.Add(new Sphere(new Vector3(0,45,-20f), 42.5f, mat3));
+            world.surfaces.Add(new Sphere(new Vector3(-2.5f,3.75f,-5.5f), 0.5f, mat5));
+            */
+
+            /* heavy testing
+            for (int i = 0; i < 100; i++)
+                world.surfaces.Add(new Sphere(new Vector3(random.Next(-24,24), random.Next(-24,24), random.Next(-24,24)), (float)random.Next(2,50) / 10f, mat1));
+            for (int i = 0; i <12; i++)
+                lights.lights.Add(new PointLight(RandomVector.ReturnRandomVector(random) * 25f, (float)random.Next(1,10) / 10));
             */
 
             // rect testing //
             //world.surfaces.Add(new RectAxis(-6, -3, -4, 4, -20, mat4));
 
-            // model testing
-            //ModelOperations.CreateModel(teapot, mat6, world, new Vector3(0,1.4f,-4));
-            //ModelOperations.CreateModel(teapot, mat6, world, new Vector3(0,2f,-5));
-            //ModelOperations.CreateModel(teapot, mat6, world, new Vector3(0,0f,-2));
-
-
             world.Init();
-            nodeWorld = new BVHNode(world, random, 999999999);
+            nodeWorld = new BVHNode(world, random, 999999999); 
 
-            
-            /*
-            // tri testing //
-            // create verts
-            Vert v0 = new Vert(new Vector3(-2, 0,-3), Vector3.Normalize(new Vector3(0,0,1)));
-            Vert v1 = new Vert(new Vector3(-5,0,-6), Vector3.Normalize(new Vector3(-1,0,0)));
-            Vert v2 = new Vert(new Vector3(-2,0,-9), Vector3.Normalize(new Vector3(0,0,-1)));
-            Vert v3 = new Vert(new Vector3(1,0,-6), Vector3.Normalize(new Vector3(1,0,0)));
-            Vert v4 = new Vert(new Vector3(-2,-3,-6), Vector3.Normalize(new Vector3(0,-1,0)));
-            Vert v5 = new Vert(new Vector3(-2,3,-6), Vector3.Normalize(new Vector3(0,1,0)));
-            // create tris
-            world.surfaces.Add(new Tri(v0, v1, v5, mat6, true, false));
-            world.surfaces.Add(new Tri(v0, v1, v4, mat6, false));
-            world.surfaces.Add(new Tri(v0, v3, v5, mat6, false));
-            world.surfaces.Add(new Tri(v0, v3, v4, mat6, true, false));
-            world.surfaces.Add(new Tri(v2, v1, v5, mat6, false));
-            world.surfaces.Add(new Tri(v2, v1, v4, mat6, true, false));
-            world.surfaces.Add(new Tri(v2, v3, v5, mat6, true, false));
-            world.surfaces.Add(new Tri(v2, v3, v4, mat6, false));
+            /* lighting
+            lights.lights.Add(new PointLight(new Vector3(6f, 2f, 3f), 5f));//, new Vector3(1.25f,0,0)));
+            lights.lights.Add(new PointLight(new Vector3(0f, 0f, -12f), 2.5f));
+            lights.lights.Add(new PointLight(new Vector3(-3f, 5f, -0.5f), 5f));//, new Vector3(0,1.25f,0)));
+            lights.lights.Add(new PointLight(new Vector3(0f,-8f,0f), 2.5f));
             */
-            
-
-            //lights.lights.Add(new PointLight(new Vector3(6f, 2f, 3f), 5f));//, new Vector3(1.25f,0,0)));
-            //lights.lights.Add(new PointLight(new Vector3(0f, 0f, -12f), 2.5f));
-            //lights.lights.Add(new PointLight(new Vector3(-3f, 5f, -0.5f), 5f));//, new Vector3(0,1.25f,0)));
-            //lights.lights.Add(new PointLight(new Vector3(0f,-8f,0f), 2.5f));
 
             base.Initialize();
         }
@@ -192,7 +151,9 @@ namespace simpleRaytracer
             buffer1Data = new Color[width * height];
             
             // thread testing
-            /* technique 1 (split screen into sections)
+            // technique 1 (split screen into sections)
+            if (!mixBufferTechnique)
+            {
                 if (numberOfAvailableThreads > 1)
                 {
                     Parallel.For(0, numberOfAvailableThreads, startThread);
@@ -206,10 +167,9 @@ namespace simpleRaytracer
                     threadArray[0] = new Thread(() => renderBlock(width, height, 0, 1, random));
                     threadArray[0].Start();
                 }
-            */
-
-            // technique 2 (render whole screen numerous times into separate buffers w diff random seed, combine at end)
-            Parallel.For(0, numberOfAvailableThreads, startThreadFull);
+            }
+            else // technique 2 (render whole screen numerous times into separate buffers w diff random seed, combine at end)
+                Parallel.For(0, numberOfAvailableThreads, startThreadFull);
         }
 
         protected override void Update(GameTime gameTime)
@@ -227,7 +187,10 @@ namespace simpleRaytracer
                 if (stillRunning)
                 {
                     // update the texture with the buffer array (old)
-                    buffer1.SetData<Color>(bufferList[0]);
+                    if (mixBufferTechnique)
+                        buffer1.SetData<Color>(bufferList[0]);
+                    else
+                        buffer1.SetData<Color>(buffer1Data);
                     return;
                 }
             }
@@ -310,8 +273,8 @@ namespace simpleRaytracer
                     // get the coordinates on the camera viewport, and cast a ray through it, jittering by a random number
                     for (int i = 0; i < samples; i++)
                     {
-                        float u = (float)(x + (float)random.Next(0, 100) / 100) / globalWidth;
-                        float v = (float)(y + (float)random.Next(0, 100) / 100) / globalHeight;
+                        float u = (float)(x + (float)random.Next(-50, 50) / 100) / globalWidth;
+                        float v = (float)(y + (float)random.Next(-50, 50) / 100) / globalHeight;
 
                         // create the ray
                         CustomRay ray = new CustomRay(camera.position, camera.lowerLeftCorner + u * camera.horizontal + v * camera.vertical - camera.position);
@@ -320,7 +283,7 @@ namespace simpleRaytracer
                         //Vector3 vectorColor1 = RayOperations.GetRayNormalColor(ray, world);
                         //Vector3 vectorColor1 = RayOperations.GetRayDepthColor(ray, world);
                         //Vector3 vectorColor1 = RayOperations.GetLights(ray, world, random, lights);
-                        Vector3 vectorColor1 = RayOperations.GetRayColor(ray, nodeWorld, random, maxDepth, lights, record, colorClamp);
+                        Vector3 vectorColor1 = RayOperations.GetRayColor(ray, nodeWorld, random, maxDepth, lights, colorClamp);
 
                         vectorRayColor += vectorColor1 / samples;
                     }
@@ -377,7 +340,7 @@ namespace simpleRaytracer
                         //Vector3 vectorColor1 = RayOperations.GetRayNormalColor(ray, nodeWorld);
                         //Vector3 vectorColor1 = RayOperations.GetRayDepthColor(ray, world);
                         //Vector3 vectorColor1 = RayOperations.GetLights(ray, nodeWorld, random, lights);
-                        Vector3 vectorColor1 = RayOperations.GetRayColor(ray, nodeWorld, random, maxDepth, lights, record, colorClamp);
+                        Vector3 vectorColor1 = RayOperations.GetRayColor(ray, nodeWorld, random, maxDepth, lights, colorClamp);
 
                         vectorRayColor += vectorColor1 / samples;
                     }

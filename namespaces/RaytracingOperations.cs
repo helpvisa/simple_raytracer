@@ -72,8 +72,9 @@ namespace Raytracing
             return t * new Vector3(0.85f, 0.75f, 1f) + (1 - t) * new Vector3(1, 1, 1);
         }
 
-        public static Vector3 GetRayColor(CustomRay ray, Surface world, Random random, int depth, Light light, hitRecord record, float clamp)
+        public static Vector3 GetRayColor(CustomRay ray, Surface world, Random random, int depth, Light light, float clamp)
         {
+            hitRecord record = new hitRecord();
             Vector3 direction = ray.direction;
 
             // break out if too many rays have already been recursively cast
@@ -110,13 +111,13 @@ namespace Raytracing
 
                 // diffuse GI pass
                 finalColor = (record.hitMat.emission + (record.hitMat.albedo * (1 - record.hitMat.metalness))
-                    * 0.5f * (GetRayColor(new CustomRay(record.point, diffuseDirection), world, random, depth - 1, light, record, clamp)))
+                    * 0.5f * (GetRayColor(new CustomRay(record.point, diffuseDirection), world, random, depth - 1, light, clamp)))
                     // metalness pass
                     + (record.hitMat.albedo * record.hitMat.metalness)
-                    * GetRayColor(new CustomRay(record.point, reflectedDirection), world, random, depth - 1, light, record, clamp)
+                    * GetRayColor(new CustomRay(record.point, reflectedDirection), world, random, depth - 1, light, clamp)
                     // additive reflectivity pass w basic fresnel
                     + (1 - record.hitMat.metalness) * (fresnel * (record.hitMat.smoothness * record.hitMat.smoothness))
-                    * GetRayColor(new CustomRay(record.point, reflectedDirection), world, random, depth - 1, light, record, clamp)
+                    * GetRayColor(new CustomRay(record.point, reflectedDirection), world, random, depth - 1, light, clamp)
                     // point light pass
                     + GetLights(ray, world, random, light);
 
