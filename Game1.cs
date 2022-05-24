@@ -38,8 +38,8 @@ namespace simpleRaytracer
         LightList lights = new LightList();
 
         // define how many samples to cast per pixel, and how deep each recursive child ray can go
-        int samples = 46;
-        int maxDepth = 4;
+        int samples = 10;
+        int maxDepth = 6;
         float colorClamp = 1f;
         Random random = new Random();
 
@@ -57,6 +57,7 @@ namespace simpleRaytracer
         Thread[] threadArray;
         List<Color[]> bufferList = new List<Color[]>();
         int numberOfAvailableThreads;
+        int totalThreads;
         bool isDone = false;
 
 
@@ -70,12 +71,12 @@ namespace simpleRaytracer
         protected override void Initialize()
         {
             // set timestep and stuff, for unlocked update
-            _graphics.SynchronizeWithVerticalRetrace = true;
+            _graphics.SynchronizeWithVerticalRetrace = false;
             IsFixedTimeStep = false;
             
             // set width and height
-            _graphics.PreferredBackBufferWidth = 960;
-            _graphics.PreferredBackBufferHeight = 540;
+            _graphics.PreferredBackBufferWidth = 256;
+            _graphics.PreferredBackBufferHeight = 512;
             _graphics.ApplyChanges();
 
             width = _graphics.PreferredBackBufferWidth;
@@ -90,34 +91,34 @@ namespace simpleRaytracer
                 numberOfAvailableThreads = 1;
             threadArray = new Thread[numberOfAvailableThreads];
             
-            // load 3d models
-            //Assimp.Scene teapot = ModelOperations.LoadModel("Content/models/scenes/dragon.dae");
-            // scene load testing
-            //camera = ModelOperations.CreateScene(teapot, mat6, world, lights, aspectRatio);
-            
             // initialize the camera
             //camera = new Camera(Vector3.Zero, new Vector3(0,0,-1), 65, aspectRatio);
             //camera = new Camera(new Vector3(0,0,0), new Vector3(-0.03f, 0.875f, -7.6f), 63, aspectRatio);
-            camera = new Camera(new Vector3(-16.5f,-9.55f,10), new Vector3(-0.8f, 1.25f, -7.6f), 15, aspectRatio);
+            //camera = new Camera(new Vector3(-16.5f,-9.55f,10), new Vector3(-0.8f, 1.25f, -7.6f), 15, aspectRatio);
             //camera = new Camera(new Vector3(-2,-1.2f,2), new Vector3(-1,0,-3), 32, aspectRatio);
 
             // define materials //
             // spheres
             Material mat1 = new Material(new Vector3(0.2f, 0.2f, 1f), 0f, 0.995f, Vector3.Zero);
             Material mat2 = new Material(new Vector3(1f, 0.65f, 0f), 1f, 0.65f, Vector3.Zero);
-            Material mat3 = new Material(new Vector3(1f, 1f, 1f), 0f, 0.15f, Vector3.Zero);
+            Material mat3 = new Material(new Vector3(1f, 1f, 1f), 1f, 1f, Vector3.Zero);
             // emissives
             Material mat4 = new Material(new Vector3(0,0,0), 0, 0f, new Vector3(50f,0.5f,0.5f));
             Material mat5 = new Material(new Vector3(0,0,0), 0, 0f, new Vector3(0.5f,0.5f,50f));
             // tris
-            Material mat6 = new Material(new Vector3(1f,1f,1f), 1f, 0.935f, Vector3.Zero);
+            Material mat6 = new Material(new Vector3(1f,0.5f,0.5f), 0f, 0.85f, Vector3.Zero);
 
-            /* sphere testing
+            // load 3d models
+            Assimp.Scene teapot = ModelOperations.LoadModel("Content/models/scenes/guitar.dae");
+            // scene load testing
+            camera = ModelOperations.CreateScene(teapot, mat6, world, lights, aspectRatio);
+
+            // sphere testing
             world.surfaces.Add(new Sphere(new Vector3(2.05f, 0.9f, -7.25f), 3.5f, mat1));
             world.surfaces.Add(new Sphere(new Vector3(-4.5f, 2f, -8f), 2.3f, mat2));
             world.surfaces.Add(new Sphere(new Vector3(0,45,-20f), 42.5f, mat3));
-            world.surfaces.Add(new Sphere(new Vector3(-2.5f,3.75f,-5.5f), 0.5f, mat5));
-            */
+            //world.surfaces.Add(new Sphere(new Vector3(-2.5f,3.75f,-5.5f), 0.5f, mat5));
+            
 
             /* heavy testing
             for (int i = 0; i < 100; i++)
@@ -125,19 +126,22 @@ namespace simpleRaytracer
             for (int i = 0; i <12; i++)
                 lights.lights.Add(new PointLight(RandomVector.ReturnRandomVector(random) * 25f, (float)random.Next(1,10) / 10));
             */
+            
 
             // rect testing //
             //world.surfaces.Add(new RectAxis(-6, -3, -4, 4, -20, mat4));
 
             world.Init();
-            nodeWorld = new BVHNode(world, random, 999999999); 
+            nodeWorld = new BVHNode(world); 
 
             /* lighting
             lights.lights.Add(new PointLight(new Vector3(6f, 2f, 3f), 5f));//, new Vector3(1.25f,0,0)));
             lights.lights.Add(new PointLight(new Vector3(0f, 0f, -12f), 2.5f));
             lights.lights.Add(new PointLight(new Vector3(-3f, 5f, -0.5f), 5f));//, new Vector3(0,1.25f,0)));
             lights.lights.Add(new PointLight(new Vector3(0f,-8f,0f), 2.5f));
+            lights.init();
             */
+            
 
             base.Initialize();
         }
@@ -157,10 +161,7 @@ namespace simpleRaytracer
                 if (numberOfAvailableThreads > 1)
                 {
                     Parallel.For(0, numberOfAvailableThreads, startThread);
-                    //{
-                        //threadArray[i] = new Thread(() => renderBlock(width, (height / (numberOfAvailableThreads-1)) * (i-1), (height / (numberOfAvailableThreads-1)) * (i-2), i - 1, new Random()));
-                        //threadArray[i].Start();
-                    //}
+                    //Parallel.For(0, numberOfAvailableThreads, startThreadScanlineInitial);
                 }
                 else
                 {
@@ -180,6 +181,8 @@ namespace simpleRaytracer
                     threadArray[i].Abort();
             }
 
+            //Parallel.For(0, threadArray.Length, startThreadScanline);
+            
             bool stillRunning = false;
             for (int i = 0; i < threadArray.Length; i++)
             {
@@ -214,7 +217,8 @@ namespace simpleRaytracer
                         }
                 }
                 buffer1.SetData<Color>(buffer1Data);
-                Console.Write("Mixed threaded buffers. ");
+                if (mixBufferTechnique)
+                    Console.Write("Mixed threaded buffers. ");
             }
 
             if (!justSorted && blurOutput && isDone)
@@ -257,11 +261,12 @@ namespace simpleRaytracer
         // render block function for threading; probably split this out later
         void renderBlock(int width, int height, int y, int threadNumber, Random random)
         {
+            Interlocked.Increment(ref totalThreads);
             // iterate through scanlines
             while (y < height)
             {
                 // print which scanline is currently being evaluated
-                Console.WriteLine("Scanlines remaining on Thread " + threadNumber + ": " + (height - y));
+                //Console.WriteLine("Scanlines remaining on Thread " + threadNumber + ": " + (height - y));
 
                 // iterate through x on scanline
                 for(int x = 0; x < width; x++)
@@ -283,7 +288,7 @@ namespace simpleRaytracer
                         //Vector3 vectorColor1 = RayOperations.GetRayNormalColor(ray, world);
                         //Vector3 vectorColor1 = RayOperations.GetRayDepthColor(ray, world);
                         //Vector3 vectorColor1 = RayOperations.GetLights(ray, world, random, lights);
-                        Vector3 vectorColor1 = RayOperations.GetRayColor(ray, nodeWorld, random, maxDepth, lights, colorClamp);
+                        Vector3 vectorColor1 = RayOperations.GetRayColor(ray, nodeWorld, random, maxDepth, lights, colorClamp, samples);
 
                         vectorRayColor += vectorColor1 / samples;
                     }
@@ -304,7 +309,7 @@ namespace simpleRaytracer
             
             if (y >= height)
             {
-                Console.WriteLine("Thread " + threadNumber + " is done rendering.");
+                //Console.WriteLine("Thread " + threadNumber + " is done rendering.");
                 Thread.Sleep(0);
             }
         }
@@ -328,8 +333,8 @@ namespace simpleRaytracer
                     Vector3 vectorRayColor = Vector3.Zero;
 
                     // get the coordinates on the camera viewport, and cast a ray through it, jittering by a random number
-                    for (int i = 0; i < samples; i++)
-                    {
+                    //for (int i = 0; i < localSamples; i++)
+                    //{
                         float u = (float)(x + (float)random.Next(-50, 50) / 100) / globalWidth;
                         float v = (float)(y + (float)random.Next(-50, 50) / 100) / globalHeight;
 
@@ -338,12 +343,12 @@ namespace simpleRaytracer
 
                         // intersect ray against bg and objects
                         //Vector3 vectorColor1 = RayOperations.GetRayNormalColor(ray, nodeWorld);
-                        //Vector3 vectorColor1 = RayOperations.GetRayDepthColor(ray, world);
+                        //Vector3 vectorColor1 = RayOperations.GetRayDepthColor(ray, nodeWorld);
                         //Vector3 vectorColor1 = RayOperations.GetLights(ray, nodeWorld, random, lights);
-                        Vector3 vectorColor1 = RayOperations.GetRayColor(ray, nodeWorld, random, maxDepth, lights, colorClamp);
+                        Vector3 vectorColor1 = RayOperations.GetRayColor(ray, nodeWorld, random, maxDepth, lights, colorClamp, samples);
 
                         vectorRayColor += vectorColor1 / samples;
-                    }
+                    //}
 
                     // write the ray color to the pixel
                     //vectorRayColor /= samples;
@@ -378,6 +383,36 @@ namespace simpleRaytracer
             bufferList.Add(newBuffer);
             threadArray[i] = new Thread(() => renderBlockFull(globalWidth, globalHeight, i + 1, new Random(), newBuffer));
             threadArray[i].Start();
+        }
+
+        void startThreadScanline(int i)
+        {
+            if (threadArray[i] == null)
+            {
+                threadArray[i] = new Thread(() => renderBlock(width, 1 + totalThreads, totalThreads, i + 1, new Random()));
+                threadArray[i].Start();
+                Console.WriteLine(((float)totalThreads / (float)globalHeight) * 100 + "% of render completed.");
+            }
+            else if (!threadArray[i].IsAlive)
+            {
+                threadArray[i] = new Thread(() => renderBlock(width, 1 + totalThreads, totalThreads, i + 1, new Random()));
+                threadArray[i].Start();
+                Console.WriteLine(((float)totalThreads / (float)globalHeight) * 100 + "% of render completed.");
+            }
+        }
+
+        void startThreadScanlineInitial(int i)
+        {
+            if (threadArray[i] == null && totalThreads < globalHeight)
+            {
+                threadArray[i] = new Thread(() => renderBlock(width, 1 + i, i, i + 1, new Random()));
+                threadArray[i].Start();
+            }
+            else if (!threadArray[i].IsAlive && totalThreads < globalHeight)
+            {
+                threadArray[i] = new Thread(() => renderBlock(width, 1 + i, i, i + 1, new Random()));
+                threadArray[i].Start();
+            }
         }
     }
 }

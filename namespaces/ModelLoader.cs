@@ -97,6 +97,7 @@ namespace ModelLoader
             {
                 Vector3 position = new Vector3(light.Position.X, light.Position.Y, light.Position.Z);
                 lights.lights.Add(new PointLight(position, light.ColorDiffuse.R / 125));
+                lights.init();
             }
 
             // load camera
@@ -107,7 +108,7 @@ namespace ModelLoader
 
                 Vector3 pos = new Vector3(camera.Position.X, camera.Position.Y, camera.Position.Z);
                 Vector3 direction = new Vector3(camera.Direction.X, camera.Direction.Y, camera.Direction.Z);
-                float fov = MathHelper.ToDegrees(camera.FieldOfview) / 2.25f;
+                float fov = MathHelper.ToDegrees(camera.FieldOfview);
 
                 Vector3 lookAt = new Vector3(pos.X + direction.X, pos.Y + direction.Y, pos.Z + direction.Z);
                 cam = new Raytracing.Camera(pos, -lookAt, fov, ratio);

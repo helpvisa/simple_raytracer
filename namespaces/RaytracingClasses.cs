@@ -168,9 +168,10 @@ namespace Raytracing
             lightAlbedo = (record.hitMat.albedo + lightColor);
 
             Vector3 lightLevel = formerLightLevel + ((lightAlbedo * (1 - record.hitMat.metalness)) * (NdotL*NdotV) * geoShadow * brightness * attenuation);
+            Vector3 loopLightLevel = lightLevel;
 
             // point light pass
-            if (world.hit(new CustomRay(record.point, directionToLight + RandomVector.ReturnRandomRangedVector(random, 0.975f)), 0.001f, float.PositiveInfinity, record))
+            if (world.hit(new CustomRay(record.point, directionToLight + RandomVector.ReturnRandomRangedVector(random, 0.95f)), 0.001f, float.PositiveInfinity, record))
                 if (CustomVectorMath.Magnitude(new CustomRay(record.point, directionToLight).getPos(record.t) - record.point) < CustomVectorMath.Magnitude(position - record.point))
                 {
                     lightLevel = formerLightLevel;
@@ -194,14 +195,23 @@ namespace Raytracing
     public class LightList : Light
     {
         public List<Light> lights = new List<Light>();
+        Light[] lightArray;
+
+        public void init()
+        {
+            lightArray = lights.ToArray();
+        }
 
         public override Vector3 calculateLight(Vector3 formerLightLevel, CustomRay ray, Surface world, hitRecord record, Random random, bool blinnPhong)
         {
-            foreach (Light light in lights)
+            if (lightArray != null && lightArray.Length > 0)
             {
-                if (world.hit(ray, 0.01f, float.PositiveInfinity, record))
+                for (int i = 0; i < lightArray.Length; i++)
                 {
-                    formerLightLevel += light.calculateLight(formerLightLevel, ray, world, record, random, blinnPhong);
+                    if (world.hit(ray, 0.01f, float.PositiveInfinity, record))
+                    {
+                        formerLightLevel += lightArray[i].calculateLight(formerLightLevel, ray, world, record, random, blinnPhong);
+                    }
                 }
             }
             return formerLightLevel;
@@ -215,7 +225,7 @@ namespace Raytracing
             inputAlbedo.X = Math.Clamp(inputAlbedo.X, 0, 1);
             inputAlbedo.Y = Math.Clamp(inputAlbedo.Y, 0, 1);
             inputAlbedo.Z = Math.Clamp(inputAlbedo.Z, 0, 1);
-
+            
             inputMetal = Math.Clamp(inputMetal, 0, 1);
 
             inputSmooth = Math.Clamp(inputSmooth, 0, 1);
@@ -273,12 +283,16 @@ namespace Raytracing
     {
         public void Init()
         {
-            foreach(Surface surface in surfaces)
+            if (surfaces != null && surfaces.Count > 0)
             {
-                surface.boundingBox();
-            }
+                for (int i = 0; i < surfaces.Count; i++)
+                {
+                    surfaces[i].boundingBox();
+                }
 
-            boundingBox();
+                boundingBox();
+                surfaceArray = surfaces.ToArray();
+            }
         }
         
         public override bool hit(CustomRay ray, float t_min, float t_max, hitRecord record)
@@ -286,12 +300,15 @@ namespace Raytracing
             bool hitAnything = false;
             float closestSoFar = t_max;
 
-            foreach (Surface surface in surfaces)
+            if (surfaceArray.Length > 0)
             {
-                if (surface.hit(ray, t_min, closestSoFar, record))
+                for (int i = 0; i < surfaceArray.Length; i++)
                 {
-                    hitAnything = true;
-                    closestSoFar = record.t;
+                    if (surfaceArray[i].hit(ray, t_min, closestSoFar, record))
+                    {
+                        hitAnything = true;
+                        closestSoFar = record.t;
+                    }
                 }
             }
 
@@ -300,32 +317,33 @@ namespace Raytracing
 
         public override bool boundingBox()
         {
-            if (surfaces.Count == 0)
+            if (surfaces.Count < 1)
                 return false;
             
             bool firstBox = true;
             AABB tempBounds = new AABB(Vector3.Zero, Vector3.Zero);
-            foreach (Surface surface in surfaces)
+            for (int i = 0; i < surfaces.Count; i++)
             {
-                if (!surface.boundingBox())
+                if (!surfaces[i].boundingBox())
                     return false;
                 
                 if (firstBox)
-                    bounds = surface.bounds;
+                    bounds = surfaces[i].bounds;
                 else
                     tempBounds = bounds;
-                    bounds = BoundingMath.surroundingBox(surface.bounds, tempBounds);
+                    bounds = BoundingMath.surroundingBox(surfaces[i].bounds, tempBounds);
                 firstBox = false;
             }
             return true;
         }
 
         public List<Surface> surfaces = new List<Surface>();
+        Surface[] surfaceArray;
     }
 
     public class BVHNode : Surface
     {
-        public BVHNode(SurfaceList list, Random random, int depth)
+        public BVHNode(SurfaceList list)
         {
             int axis; //(int)Math.Round((float)random.Next(0,300) / 300);
             float sizeX = Math.Abs(list.bounds.max.X - list.bounds.min.X);
@@ -390,10 +408,11 @@ namespace Raytracing
                 
                 leftList.Init();
                 rightList.Init();
-                if (depth > 0)
+
+                if (list.surfaces.Count > 2)
                 {
-                    left = new BVHNode(leftList, random, depth - 1);
-                    right = new BVHNode(rightList, random, depth - 1);
+                    left = new BVHNode(leftList);
+                    right = new BVHNode(rightList);
                 }
                 else
                 {
@@ -413,14 +432,11 @@ namespace Raytracing
             
             bool hitLeft = false;
             bool hitRight = false;
+
             if (hitLeft = (left.hit(ray, t_min, t_max, record)))
-            {
                 t_max = record.t;
-            }
-            if(hitRight = (right.hit(ray, t_min, t_max, record)))
-            {
-                t_max = record.t;
-            }
+            if (hitRight = (right.hit(ray, t_min, t_max, record)))
+                t_min = record.t;
 
             return hitLeft || hitRight;
         }

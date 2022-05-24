@@ -72,9 +72,10 @@ namespace Raytracing
             return t * new Vector3(0.85f, 0.75f, 1f) + (1 - t) * new Vector3(1, 1, 1);
         }
 
-        public static Vector3 GetRayColor(CustomRay ray, Surface world, Random random, int depth, Light light, float clamp)
+        public static Vector3 GetRayColor(CustomRay ray, Surface world, Random random, int depth, Light light, float clamp, int samples)
         {
             hitRecord record = new hitRecord();
+
             Vector3 direction = ray.direction;
 
             // break out if too many rays have already been recursively cast
@@ -84,6 +85,37 @@ namespace Raytracing
             // if object is hit
             if (world.hit(ray, 0.01f, float.PositiveInfinity, record))
             {
+                if (record.hitMat.smoothness < 0.6f)
+                {
+                    depth -= (int)((float)depth / 4);
+                    samples += (int)((float)samples / 8);
+                }
+                if (record.hitMat.smoothness < 0.4f)
+                {
+                    depth -= (int)((float)depth / 2);
+                    samples += (int)((float)samples / 10);
+                }
+                if (record.hitMat.smoothness < 0.2f)
+                {
+                    depth -= (int)((float)depth / 2);
+                    samples += (int)((float)samples / 12);
+                }
+                if (record.hitMat.smoothness <= 0.05f)
+                {
+                    depth = 1;
+                    samples += (int)((float)samples / 14);
+                }
+
+                if (record.hitMat.smoothness >= 0.8f)
+                    samples -= (int)((float)samples / 8);
+                if (record.hitMat.smoothness >= 0.9f)
+                    samples -= (int)((float)samples / 8);
+                if (record.hitMat.smoothness >= 0.95f)
+                    samples -= (int)((float)samples / 8);
+                
+                depth = Math.Clamp(depth, 1, 999999);
+
+                
                 Vector3 diffuseDirection = record.normal + RandomVector.ReturnHemisphereRandomVector(random, record.normal);// + RandomVector.ReturnRandomNormalizedUnitSphereVector(random);
                 /*
                 if (CustomVectorMath.NearZero(diffuseDirection))
@@ -108,19 +140,47 @@ namespace Raytracing
                 fresnel *= fresnel;
 
                 Vector3 finalColor = Vector3.Zero;
+                // first point light pass
+                Vector3 lightColor = GetLights(ray, world, random, light);
+                bool doMetalPass = true;
+                bool doReflectPass = true;
+
+                if (record.hitMat.metalness == 0)
+                    doMetalPass = false;
+                if (record.hitMat.metalness == 1)
+                    doReflectPass = false;
 
                 // diffuse GI pass
-                finalColor = (record.hitMat.emission + (record.hitMat.albedo * (1 - record.hitMat.metalness))
-                    * 0.5f * (GetRayColor(new CustomRay(record.point, diffuseDirection), world, random, depth - 1, light, clamp)))
-                    // metalness pass
-                    + (record.hitMat.albedo * record.hitMat.metalness)
-                    * GetRayColor(new CustomRay(record.point, reflectedDirection), world, random, depth - 1, light, clamp)
-                    // additive reflectivity pass w basic fresnel
-                    + (1 - record.hitMat.metalness) * (fresnel * (record.hitMat.smoothness * record.hitMat.smoothness))
-                    * GetRayColor(new CustomRay(record.point, reflectedDirection), world, random, depth - 1, light, clamp)
-                    // point light pass
-                    + GetLights(ray, world, random, light);
-
+                if (doMetalPass && doReflectPass)
+                {
+                    finalColor = (record.hitMat.emission + (record.hitMat.albedo * (1 - record.hitMat.metalness))
+                        * 0.7f * (GetRayColor(new CustomRay(record.point, diffuseDirection), world, random, depth - 1, light, clamp, samples)))
+                        // metalness pass
+                        + (record.hitMat.albedo * record.hitMat.metalness)
+                        * GetRayColor(new CustomRay(record.point, reflectedDirection), world, random, depth - 1, light, clamp, samples)
+                        // additive reflectivity pass w basic fresnel
+                        + (1 - record.hitMat.metalness) * (fresnel * (record.hitMat.smoothness * record.hitMat.smoothness))
+                        * GetRayColor(new CustomRay(record.point, reflectedDirection), world, random, depth - 1, light, clamp, samples)
+                        + lightColor;
+                }
+                else if (doMetalPass && !doReflectPass)
+                {
+                    finalColor = (record.hitMat.emission + (record.hitMat.albedo * (1 - record.hitMat.metalness))
+                        * 0.7f * (GetRayColor(new CustomRay(record.point, diffuseDirection), world, random, depth - 1, light, clamp, samples)))
+                        // metalness pass
+                        + (record.hitMat.albedo * record.hitMat.metalness)
+                        * GetRayColor(new CustomRay(record.point, reflectedDirection), world, random, depth - 1, light, clamp, samples)
+                        + lightColor;
+                }
+                else if (!doMetalPass && doReflectPass)
+                {
+                    finalColor = (record.hitMat.emission + (record.hitMat.albedo * (1 - record.hitMat.metalness))
+                        * 0.7f * (GetRayColor(new CustomRay(record.point, diffuseDirection), world, random, depth - 1, light, clamp, samples)))
+                        // additive reflectivity pass w basic fresnel
+                        + (1 - record.hitMat.metalness) * (fresnel * (record.hitMat.smoothness * record.hitMat.smoothness))
+                        * GetRayColor(new CustomRay(record.point, reflectedDirection), world, random, depth - 1, light, clamp, samples)
+                        + lightColor;
+                }
                 
                 // clamp return value to reduce noise
                 finalColor.X = Math.Clamp(finalColor.X, 0, clamp);
@@ -130,8 +190,8 @@ namespace Raytracing
                 return finalColor;
             }
             float t = 0.5f * (direction.Y + 1);
-            //return t * new Vector3(0.8f, 0.4f, 0.4f) + (1 - t) * new Vector3(0.4f, 0.2f, 0.2f);
-            return t * new Vector3(0f,0f,0f);
+            return t * new Vector3(0.05f, 0f, 0f) + (1 - t) * new Vector3(0.01f, 0f, 0f);
+            //return t * new Vector3(0f,0f,0f);
         }
 
         public static Vector3 GetLights(CustomRay ray, Surface world, Random random, Light light)
