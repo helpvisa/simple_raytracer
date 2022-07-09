@@ -1,5 +1,5 @@
 # Simple C# Raytracer
-##Made in Monogame
+## Made in Monogame
 
 This is a simple work-in-progress raytracer coded in C# using the Monogame framework.
 
