@@ -95,96 +95,100 @@ namespace Raytracing
 
         public override Vector3 calculateLight(Vector3 formerLightLevel, CustomRay ray, Surface world, hitRecord record, Random random, bool blinnPhong)
         {
-            // get roughness for specular calculation
-            float roughness = 1 - record.hitMat.smoothness;
-            float roughSqr = roughness * roughness;
-            float geoShadow = 1;
-            float attenuation = Math.Clamp(1 / Vector3.DistanceSquared(record.point, position), 0, 1);
-            
-            // direction to light
-            Vector3 directionToLight = Vector3.Normalize((position - record.point));
-
-            Vector3 halfAngle = Vector3.Normalize(directionToLight + Vector3.Normalize(-ray.direction));
-            
-            float VdotH = Math.Clamp(Vector3.Dot(-ray.direction, halfAngle), 0, 1);
-            float NdotL = Math.Clamp(Vector3.Dot(record.normal, directionToLight), 0, 1);
-            float NdotV = Math.Clamp(Vector3.Dot(record.normal, Vector3.Normalize(-ray.direction)), 0, 1);
-            float LdotH = Math.Clamp(Vector3.Dot(directionToLight, halfAngle), 0, 1);
-            float NdotH = Math.Clamp(Vector3.Dot(record.normal, halfAngle), 0, 1);
-            float NdotHSqr = NdotH * NdotH;
-            float tanNdotHSqr = (1 - NdotHSqr) / NdotHSqr;
-
-            float ggx = 0;
-            float blinn = 0;
-
-            if (!blinnPhong)
+            if (record.hitMat != null)
             {
-                float NdotLSqr = NdotL * NdotL;
-                float NdotVSqr = NdotV * NdotV;
-                float SmithL = 2 / (1 + (float)Math.Sqrt(1 + roughSqr * (1 - NdotLSqr) / NdotLSqr));
-                float SmithV = 2 / (1 + (float)Math.Sqrt(1 + roughSqr * (1 - NdotVSqr) / NdotVSqr));
-                geoShadow = SmithL * SmithV;
-                
-                float F, D, vis;
+                // get roughness for specular calculation
+                float roughness = 1 - record.hitMat.smoothness;
+                float roughSqr = roughness * roughness;
+                float geoShadow = 1;
+                float attenuation = Math.Clamp(1 / Vector3.DistanceSquared(record.point, position), 0, 1);
 
-                // D
-                float aSqr = roughSqr;// * roughSqr;
-                float pi = (float)Math.PI;
-                float denom = NdotH * NdotH * (aSqr - 1f) + 1f;
-                D = aSqr / (pi * denom * denom);
+                // direction to light
+                Vector3 directionToLight = Vector3.Normalize((position - record.point));
 
-                // F
-                float LdotH5 = (float)Math.Pow(1f - LdotH, 5);
-                float f0 = 0.5f;
-                F = f0 + (1f - f0) * LdotH5;
+                Vector3 halfAngle = Vector3.Normalize(directionToLight + Vector3.Normalize(-ray.direction));
 
-                // V
-                float k = roughSqr / 2f;
-                vis = (1f / (NdotL * (1f - k) + k)) * (1f / (NdotV * (1f - k) + k));
+                float VdotH = Math.Clamp(Vector3.Dot(-ray.direction, halfAngle), 0, 1);
+                float NdotL = Math.Clamp(Vector3.Dot(record.normal, directionToLight), 0, 1);
+                float NdotV = Math.Clamp(Vector3.Dot(record.normal, Vector3.Normalize(-ray.direction)), 0, 1);
+                float LdotH = Math.Clamp(Vector3.Dot(directionToLight, halfAngle), 0, 1);
+                float NdotH = Math.Clamp(Vector3.Dot(record.normal, halfAngle), 0, 1);
+                float NdotHSqr = NdotH * NdotH;
+                float tanNdotHSqr = (1 - NdotHSqr) / NdotHSqr;
 
-                ggx = NdotL * D * F * vis;
-                ggx *= (brightness / 2);
-                //ggx *= (record.hitMat.smoothness * record.hitMat.smoothness);
-            }
-            else
-            {
-                float NdotLSqr = NdotL * NdotL;
-                float NdotVSqr = NdotV * NdotV;
-                float calcL = (NdotL)/(roughSqr * (float)Math.Sqrt(1 - NdotLSqr));
-                float calcV = (NdotV)/(roughSqr * (float)Math.Sqrt(1 - NdotVSqr));
-                float SmithL = calcL < 1.6 ? (((3.535f * calcL) + (2.181f * calcL * calcL)) / (1 + (2.276f * calcL) + (2.577f * calcL * calcL))) : 1;
-                float SmithV = calcV < 1.6 ? (((3.535f * calcV) + (2.181f * calcV * calcV)) / (1 + (2.276f * calcV) + (2.577f * calcV * calcV))) : 1;
-                geoShadow = SmithL * SmithV;
-                
-                blinn = Vector3.Dot(record.normal, halfAngle);
-                blinn = Math.Clamp(blinn, 0, 1);
-                blinn = NdotL != 0 ? blinn : 0;
-                blinn = (float)Math.Pow(blinn, ((record.hitMat.smoothness * record.hitMat.smoothness) * 200));
-                blinn *= (record.hitMat.smoothness * record.hitMat.smoothness) + 0.001f;
-                blinn *= brightness;
-            }
+                float ggx = 0;
+                float blinn = 0;
 
-            Vector3 lightAlbedo;
-            lightAlbedo = (record.hitMat.albedo + lightColor);
-
-            Vector3 lightLevel = formerLightLevel + ((lightAlbedo * (1 - record.hitMat.metalness)) * (NdotL*NdotV) * geoShadow * brightness * attenuation);
-            Vector3 loopLightLevel = lightLevel;
-
-            // point light pass
-            if (world.hit(new CustomRay(record.point, directionToLight + RandomVector.ReturnRandomRangedVector(random, 0.95f)), 0.001f, float.PositiveInfinity, record))
-                if (CustomVectorMath.Magnitude(new CustomRay(record.point, directionToLight).getPos(record.t) - record.point) < CustomVectorMath.Magnitude(position - record.point))
+                if (!blinnPhong)
                 {
-                    lightLevel = formerLightLevel;
-                    if (!blinnPhong)
-                        ggx = 0;
-                    else
-                        blinn = 0;
+                    float NdotLSqr = NdotL * NdotL;
+                    float NdotVSqr = NdotV * NdotV;
+                    float SmithL = 2 / (1 + (float)Math.Sqrt(1 + roughSqr * (1 - NdotLSqr) / NdotLSqr));
+                    float SmithV = 2 / (1 + (float)Math.Sqrt(1 + roughSqr * (1 - NdotVSqr) / NdotVSqr));
+                    geoShadow = SmithL * SmithV;
+
+                    float F, D, vis;
+
+                    // D
+                    float aSqr = roughSqr;// * roughSqr;
+                    float pi = (float)Math.PI;
+                    float denom = NdotH * NdotH * (aSqr - 1f) + 1f;
+                    D = aSqr / (pi * denom * denom);
+
+                    // F
+                    float LdotH5 = (float)Math.Pow(1f - LdotH, 5);
+                    float f0 = 0.5f;
+                    F = f0 + (1f - f0) * LdotH5;
+
+                    // V
+                    float k = roughSqr / 2f;
+                    vis = (1f / (NdotL * (1f - k) + k)) * (1f / (NdotV * (1f - k) + k));
+
+                    ggx = NdotL * D * F * vis;
+                    ggx *= (brightness / 2);
+                    //ggx *= (record.hitMat.smoothness * record.hitMat.smoothness);
+                }
+                else
+                {
+                    float NdotLSqr = NdotL * NdotL;
+                    float NdotVSqr = NdotV * NdotV;
+                    float calcL = (NdotL) / (roughSqr * (float)Math.Sqrt(1 - NdotLSqr));
+                    float calcV = (NdotV) / (roughSqr * (float)Math.Sqrt(1 - NdotVSqr));
+                    float SmithL = calcL < 1.6 ? (((3.535f * calcL) + (2.181f * calcL * calcL)) / (1 + (2.276f * calcL) + (2.577f * calcL * calcL))) : 1;
+                    float SmithV = calcV < 1.6 ? (((3.535f * calcV) + (2.181f * calcV * calcV)) / (1 + (2.276f * calcV) + (2.577f * calcV * calcV))) : 1;
+                    geoShadow = SmithL * SmithV;
+
+                    blinn = Vector3.Dot(record.normal, halfAngle);
+                    blinn = Math.Clamp(blinn, 0, 1);
+                    blinn = NdotL != 0 ? blinn : 0;
+                    blinn = (float)Math.Pow(blinn, ((record.hitMat.smoothness * record.hitMat.smoothness) * 200));
+                    blinn *= (record.hitMat.smoothness * record.hitMat.smoothness) + 0.001f;
+                    blinn *= brightness;
                 }
 
-            if (!blinnPhong)
-                return lightLevel + ((Vector3.Lerp(new Vector3(1,1,1) + lightColor, lightAlbedo, record.hitMat.metalness) / (float)Math.PI) * ggx * attenuation);
-            else 
-                return lightLevel + (Vector3.Lerp(new Vector3(1,1,1) + lightColor, lightAlbedo, record.hitMat.metalness) * blinn * attenuation);
+                Vector3 lightAlbedo;
+                lightAlbedo = (record.hitMat.albedo + lightColor);
+
+                Vector3 lightLevel = formerLightLevel + ((lightAlbedo * (1 - record.hitMat.metalness)) * (NdotL * NdotV) * geoShadow * brightness * attenuation);
+                Vector3 loopLightLevel = lightLevel;
+
+                // point light pass
+                if (world.hit(new CustomRay(record.point, directionToLight + RandomVector.ReturnRandomRangedVector(random, 0.95f)), 0.001f, float.PositiveInfinity, record))
+                    if (CustomVectorMath.Magnitude(new CustomRay(record.point, directionToLight).getPos(record.t) - record.point) < CustomVectorMath.Magnitude(position - record.point))
+                    {
+                        lightLevel = formerLightLevel;
+                        if (!blinnPhong)
+                            ggx = 0;
+                        else
+                            blinn = 0;
+                    }
+
+                if (!blinnPhong)
+                    return lightLevel + ((Vector3.Lerp(new Vector3(1, 1, 1) + lightColor, lightAlbedo, record.hitMat.metalness) / (float)Math.PI) * ggx * attenuation);
+                else
+                    return lightLevel + (Vector3.Lerp(new Vector3(1, 1, 1) + lightColor, lightAlbedo, record.hitMat.metalness) * blinn * attenuation);
+            }
+            else return Vector3.Zero;
         }
 
         public Vector3 position;
@@ -274,6 +278,11 @@ namespace Raytracing
             return false;
         }
 
+        public virtual bool boundsHit(CustomRay ray, float t_min, float t_max)
+        {
+            return false;
+        }
+
         public Vector3 center;
         public AABB bounds;
     }
@@ -315,6 +324,11 @@ namespace Raytracing
             return hitAnything;
         }
 
+        public override bool boundsHit(CustomRay ray, float t_min, float t_max)
+        {
+            return bounds.hit(ray, t_min, t_max);
+        }
+
         public override bool boundingBox()
         {
             if (surfaces.Count < 1)
@@ -330,8 +344,10 @@ namespace Raytracing
                 if (firstBox)
                     bounds = surfaces[i].bounds;
                 else
+                {
                     tempBounds = bounds;
                     bounds = BoundingMath.surroundingBox(surfaces[i].bounds, tempBounds);
+                }
                 firstBox = false;
             }
             return true;
@@ -372,14 +388,14 @@ namespace Raytracing
                 {
                     left = list.surfaces[1];
                     right = list.surfaces[0];
-                    bounds = BoundingMath.surroundingBox(right.bounds, left.bounds);
+                    bounds = BoundingMath.surroundingBox(left.bounds, right.bounds);
                     //Console.WriteLine("New BVH calc bounds are " + bounds.min + " and " + bounds.max);
                 }
                 else
                 {
                     left = list.surfaces[0];
                     right = list.surfaces[1];
-                    bounds = BoundingMath.surroundingBox(right.bounds, left.bounds);
+                    bounds = BoundingMath.surroundingBox(left.bounds, right.bounds);
                     //Console.WriteLine("New BVH calc bounds are " + bounds.min + " and " + bounds.max);
                 }
 
@@ -420,25 +436,57 @@ namespace Raytracing
                     right = rightList;
                 }
 
-                bounds = BoundingMath.surroundingBox(right.bounds, left.bounds);
+                bounds = BoundingMath.surroundingBox(left.bounds, right.bounds);
                 //Console.WriteLine("New BVH calc bounds are " + bounds.min + " and " + bounds.max);
             }
         }
         
         public override bool hit(CustomRay ray, float t_min, float t_max, hitRecord record)
         {
-            if (!bounds.hit(ray, t_min, t_max, record))
+            if (boundsHit(ray, t_min, t_max))
+            {
+                bool hitLeft;
+                bool hitRight;
+
+                hitLeft = left.boundsHit(ray, t_min, t_max);
+                hitRight = right.boundsHit(ray, t_min, t_max);
+
+                if (hitLeft && hitRight)
+                {
+                    float leftMax = left.bounds.local_tmax;
+                    float rightMax = right.bounds.local_tmax;
+
+                    if (leftMax < rightMax)
+                    {
+                        left.hit(ray, t_min, t_max, record);
+                        right.hit(ray, t_min, t_max, record);
+                    }
+                    else if (rightMax < leftMax)
+                    {
+                        right.hit(ray, t_min, t_max, record);
+                        left.hit(ray, t_min, t_max, record);
+                    }
+                    return true;
+                }
+                else if (hitLeft)
+                {
+                    left.hit(ray, t_min, t_max, record);
+                    return true;
+                }
+                else if (hitRight)
+                {
+                    right.hit(ray, t_min, t_max, record);
+                    return true;
+                }
                 return false;
-            
-            bool hitLeft = false;
-            bool hitRight = false;
+            }
+            else
+                return false;
+        }
 
-            if (hitLeft = (left.hit(ray, t_min, t_max, record)))
-                t_max = record.t;
-            if (hitRight = (right.hit(ray, t_min, t_max, record)))
-                t_min = record.t;
-
-            return hitLeft || hitRight;
+        public override bool boundsHit(CustomRay ray, float t_min, float t_max)
+        {
+            return bounds.hit(ray, t_min, t_max);
         }
         
         public Surface left;
@@ -454,6 +502,7 @@ namespace Raytracing
             center = origin;
             radius = inputRadius;
             material = inputMat;
+            boundingBox();
         }
 
         public override bool hit(CustomRay ray, float t_min, float t_max, hitRecord record)
@@ -482,8 +531,14 @@ namespace Raytracing
             Vector3 outwardNormal = Vector3.Normalize((record.point - origin) / radius);
             record.setFaceNormal(ray, outwardNormal);
             record.hitMat = material;
+            t_max = root;
 
             return true;
+        }
+
+        public override bool boundsHit(CustomRay ray, float t_min, float t_max)
+        {
+            return bounds.hit(ray, t_min, t_max);
         }
 
         public override bool boundingBox()
@@ -532,7 +587,13 @@ namespace Raytracing
             record.setFaceNormal(ray, outwardNormal);
             record.hitMat = material;
             record.point = ray.getPos(t);
+            t_max = t;
             return true;
+        }
+
+        public override bool boundsHit(CustomRay ray, float t_min, float t_max)
+        {
+            return bounds.hit(ray, t_min, t_max);
         }
 
         float x1;
@@ -560,6 +621,8 @@ namespace Raytracing
 
             AB = vertB - vertA;
             AC = vertC - vertA;
+
+            boundingBox();
         }
 
         public Tri(Vert v0, Vert v1, Vert v2, Material inputMat, bool blendNormals)
@@ -576,6 +639,8 @@ namespace Raytracing
 
             AB = vertB - vertA;
             AC = vertC - vertA;
+
+            boundingBox();
         }
 
         public Tri(Vert v0, Vert v1, Vert v2, Material inputMat)
@@ -592,6 +657,8 @@ namespace Raytracing
 
             AB = vertB - vertA;
             AC = vertC - vertA;
+
+            boundingBox();
         }
         
         public override bool hit(CustomRay ray, float t_min, float t_max, hitRecord record)
@@ -643,7 +710,13 @@ namespace Raytracing
             record.frontFace = true;
             record.hitMat = material;
             record.point = ray.getPos(t);
+            t_max = t;
             return true;
+        }
+
+        public override bool boundsHit(CustomRay ray, float t_min, float t_max)
+        {
+            return bounds.hit(ray, t_min, t_max);
         }
 
         public override bool boundingBox()
@@ -697,9 +770,11 @@ namespace Raytracing
         {
             max = inMax;
             min = inMin;
+            local_tmin = 0.001f;
+            local_tmax = float.PositiveInfinity;
         }
         
-        public bool hit(CustomRay ray, float t_min, float t_max, hitRecord record)
+        public bool hit(CustomRay ray, float t_min, float t_max)
         {
             
             // needed for approaches 1 and 2
@@ -777,20 +852,23 @@ namespace Raytracing
             float t5 = (min.Z - ray.origin.Z) * ray.dirFrac.Z;
             float t6 = (max.Z - ray.origin.Z) * ray.dirFrac.Z;
 
-            t_min = Math.Max(Math.Max(Math.Min(t1, t2), Math.Min(t3,t4)), Math.Min(t5,t6));
-            t_max = Math.Min(Math.Min(Math.Max(t1,t2), Math.Max(t3,t4)), Math.Max(t5,t6));
+            local_tmin = Math.Max(Math.Max(Math.Min(t1, t2), Math.Min(t3,t4)), Math.Min(t5,t6));
+            local_tmax = Math.Min(Math.Min(Math.Max(t1,t2), Math.Max(t3,t4)), Math.Max(t5,t6));
 
-            if (t_max < 0)
+            if (local_tmax < 0)
                 return false;
 
-            if (t_min > t_max)
+            if (local_tmin > local_tmax)
                 return false;
+            
             
             return true;
         }
         
         public Vector3 max;
         public Vector3 min;
+        public float local_tmin;
+        public float local_tmax;
     }
 
     // data class for storing data about hit points

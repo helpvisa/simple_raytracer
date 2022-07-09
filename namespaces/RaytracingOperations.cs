@@ -85,109 +85,109 @@ namespace Raytracing
             // if object is hit
             if (world.hit(ray, 0.01f, float.PositiveInfinity, record))
             {
-                if (record.hitMat.smoothness < 0.6f)
+                if (record.hitMat != null)
                 {
-                    depth -= (int)((float)depth / 4);
-                    samples += (int)((float)samples / 8);
-                }
-                if (record.hitMat.smoothness < 0.4f)
-                {
-                    depth -= (int)((float)depth / 2);
-                    samples += (int)((float)samples / 10);
-                }
-                if (record.hitMat.smoothness < 0.2f)
-                {
-                    depth -= (int)((float)depth / 2);
-                    samples += (int)((float)samples / 12);
-                }
-                if (record.hitMat.smoothness <= 0.05f)
-                {
-                    depth = 1;
-                    samples += (int)((float)samples / 14);
-                }
+                    if (record.hitMat.smoothness < 0.6f)
+                    {
+                        depth -= (int)((float)depth / 4);
+                        samples += (int)((float)samples / 8);
+                    }
+                    if (record.hitMat.smoothness < 0.4f)
+                    {
+                        depth -= (int)((float)depth / 2);
+                        samples += (int)((float)samples / 10);
+                    }
+                    if (record.hitMat.smoothness < 0.2f)
+                    {
+                        depth -= (int)((float)depth / 2);
+                        samples += (int)((float)samples / 12);
+                    }
+                    if (record.hitMat.smoothness <= 0.05f)
+                    {
+                        depth = 1;
+                        samples += (int)((float)samples / 14);
+                    }
 
-                if (record.hitMat.smoothness >= 0.8f)
-                    samples -= (int)((float)samples / 8);
-                if (record.hitMat.smoothness >= 0.9f)
-                    samples -= (int)((float)samples / 8);
-                if (record.hitMat.smoothness >= 0.95f)
-                    samples -= (int)((float)samples / 8);
-                
-                depth = Math.Clamp(depth, 1, 999999);
+                    if (record.hitMat.smoothness >= 0.8f)
+                        samples -= (int)((float)samples / 8);
+                    if (record.hitMat.smoothness >= 0.9f)
+                        samples -= (int)((float)samples / 8);
+                    if (record.hitMat.smoothness >= 0.95f)
+                        samples -= (int)((float)samples / 8);
 
-                
-                Vector3 diffuseDirection = record.normal + RandomVector.ReturnHemisphereRandomVector(random, record.normal);// + RandomVector.ReturnRandomNormalizedUnitSphereVector(random);
-                /*
-                if (CustomVectorMath.NearZero(diffuseDirection))
-                {
-                    diffuseDirection = record.normal;
-                    Console.Write("Near Zero!");
-                }
-                */
-                
-                Vector3 reflectedDirection = Vector3.Reflect(direction, record.normal + RandomVector.ReturnRandomRangedVector(random, (float)Math.Sqrt(record.hitMat.smoothness)));
-                
-                /*if (CustomVectorMath.NearZero(reflectedDirection))
-                {
-                    reflectedDirection = record.normal;
-                    Console.Write("Near Zero!");
-                }
-                */
-                
-                float fresnel = (CustomVectorMath.AngleBetween(direction, reflectedDirection) / 180);
-                
-                // default fresnel squared
-                fresnel *= fresnel;
+                    depth = Math.Clamp(depth, 1, 999999);
 
-                Vector3 finalColor = Vector3.Zero;
-                // first point light pass
-                Vector3 lightColor = GetLights(ray, world, random, light);
-                bool doMetalPass = true;
-                bool doReflectPass = true;
 
-                if (record.hitMat.metalness == 0)
-                    doMetalPass = false;
-                if (record.hitMat.metalness == 1)
-                    doReflectPass = false;
+                    Vector3 diffuseDirection = record.normal + RandomVector.ReturnHemisphereRandomVector(random, record.normal);// + RandomVector.ReturnRandomNormalizedUnitSphereVector(random);
+                    if (CustomVectorMath.NearZero(diffuseDirection))
+                    {
+                        diffuseDirection = record.normal;
+                        Console.Write("Near Zero!");
+                    }
 
-                // diffuse GI pass
-                if (doMetalPass && doReflectPass)
-                {
-                    finalColor = (record.hitMat.emission + (record.hitMat.albedo * (1 - record.hitMat.metalness))
-                        * 0.7f * (GetRayColor(new CustomRay(record.point, diffuseDirection), world, random, depth - 1, light, clamp, samples)))
-                        // metalness pass
-                        + (record.hitMat.albedo * record.hitMat.metalness)
-                        * GetRayColor(new CustomRay(record.point, reflectedDirection), world, random, depth - 1, light, clamp, samples)
-                        // additive reflectivity pass w basic fresnel
-                        + (1 - record.hitMat.metalness) * (fresnel * (record.hitMat.smoothness * record.hitMat.smoothness))
-                        * GetRayColor(new CustomRay(record.point, reflectedDirection), world, random, depth - 1, light, clamp, samples)
-                        + lightColor;
-                }
-                else if (doMetalPass && !doReflectPass)
-                {
-                    finalColor = (record.hitMat.emission + (record.hitMat.albedo * (1 - record.hitMat.metalness))
-                        * 0.7f * (GetRayColor(new CustomRay(record.point, diffuseDirection), world, random, depth - 1, light, clamp, samples)))
-                        // metalness pass
-                        + (record.hitMat.albedo * record.hitMat.metalness)
-                        * GetRayColor(new CustomRay(record.point, reflectedDirection), world, random, depth - 1, light, clamp, samples)
-                        + lightColor;
-                }
-                else if (!doMetalPass && doReflectPass)
-                {
-                    finalColor = (record.hitMat.emission + (record.hitMat.albedo * (1 - record.hitMat.metalness))
-                        * 0.7f * (GetRayColor(new CustomRay(record.point, diffuseDirection), world, random, depth - 1, light, clamp, samples)))
-                        // additive reflectivity pass w basic fresnel
-                        + (1 - record.hitMat.metalness) * (fresnel * (record.hitMat.smoothness * record.hitMat.smoothness))
-                        * GetRayColor(new CustomRay(record.point, reflectedDirection), world, random, depth - 1, light, clamp, samples)
-                        + lightColor;
-                }
-                
-                // clamp return value to reduce noise
-                finalColor.X = Math.Clamp(finalColor.X, 0, clamp);
-                finalColor.Y = Math.Clamp(finalColor.Y, 0, clamp);
-                finalColor.Z = Math.Clamp(finalColor.Z, 0, clamp);
+                    Vector3 reflectedDirection = Vector3.Reflect(direction, record.normal + RandomVector.ReturnRandomRangedVector(random, (float)Math.Sqrt(record.hitMat.smoothness)));
 
-                return finalColor;
+                    if (CustomVectorMath.NearZero(reflectedDirection))
+                    {
+                        reflectedDirection = record.normal;
+                        Console.Write("Near Zero!");
+                    }
+
+                    float fresnel = (CustomVectorMath.AngleBetween(direction, reflectedDirection) / 180);
+
+                    // default fresnel squared
+                    fresnel *= fresnel;
+
+                    Vector3 finalColor = Vector3.Zero;
+                    // first point light pass
+                    Vector3 lightColor = GetLights(ray, world, random, light);
+                    bool doMetalPass = true;
+                    bool doReflectPass = true;
+
+                    if (record.hitMat.metalness == 0)
+                        doMetalPass = false;
+                    if (record.hitMat.metalness == 1)
+                        doReflectPass = false;
+
+                    // diffuse GI pass
+                    if (doMetalPass && doReflectPass)
+                    {
+                        finalColor = (record.hitMat.emission + (record.hitMat.albedo * (1 - record.hitMat.metalness))
+                            * 0.7f * (GetRayColor(new CustomRay(record.point, diffuseDirection), world, random, depth - 1, light, clamp, samples)))
+                            // metalness pass
+                            + (record.hitMat.albedo * record.hitMat.metalness)
+                            * GetRayColor(new CustomRay(record.point, reflectedDirection), world, random, depth - 1, light, clamp, samples)
+                            // additive reflectivity pass w basic fresnel
+                            + (1 - record.hitMat.metalness) * (fresnel * (record.hitMat.smoothness * record.hitMat.smoothness))
+                            * GetRayColor(new CustomRay(record.point, reflectedDirection), world, random, depth - 1, light, clamp, samples)
+                            + lightColor;
+                    }
+                    else if (doMetalPass && !doReflectPass)
+                    {
+                        finalColor = (record.hitMat.emission + (record.hitMat.albedo * (1 - record.hitMat.metalness))
+                            * 0.7f * (GetRayColor(new CustomRay(record.point, diffuseDirection), world, random, depth - 1, light, clamp, samples)))
+                            // metalness pass
+                            + (record.hitMat.albedo * record.hitMat.metalness)
+                            * GetRayColor(new CustomRay(record.point, reflectedDirection), world, random, depth - 1, light, clamp, samples)
+                            + lightColor;
+                    }
+                    else if (!doMetalPass && doReflectPass)
+                    {
+                        finalColor = (record.hitMat.emission + (record.hitMat.albedo * (1 - record.hitMat.metalness))
+                            * 0.7f * (GetRayColor(new CustomRay(record.point, diffuseDirection), world, random, depth - 1, light, clamp, samples)))
+                            // additive reflectivity pass w basic fresnel
+                            + (1 - record.hitMat.metalness) * (fresnel * (record.hitMat.smoothness * record.hitMat.smoothness))
+                            * GetRayColor(new CustomRay(record.point, reflectedDirection), world, random, depth - 1, light, clamp, samples)
+                            + lightColor;
+                    }
+
+                    // clamp return value to reduce noise
+                    finalColor.X = Math.Clamp(finalColor.X, 0, clamp);
+                    finalColor.Y = Math.Clamp(finalColor.Y, 0, clamp);
+                    finalColor.Z = Math.Clamp(finalColor.Z, 0, clamp);
+
+                    return finalColor;
+                }
             }
             float t = 0.5f * (direction.Y + 1);
             return t * new Vector3(0.05f, 0f, 0f) + (1 - t) * new Vector3(0.01f, 0f, 0f);

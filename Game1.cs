@@ -38,8 +38,8 @@ namespace simpleRaytracer
         LightList lights = new LightList();
 
         // define how many samples to cast per pixel, and how deep each recursive child ray can go
-        int samples = 10;
-        int maxDepth = 6;
+        int samples = 1;
+        int maxDepth = 1;
         float colorClamp = 1f;
         Random random = new Random();
 
@@ -75,8 +75,8 @@ namespace simpleRaytracer
             IsFixedTimeStep = false;
             
             // set width and height
-            _graphics.PreferredBackBufferWidth = 256;
-            _graphics.PreferredBackBufferHeight = 512;
+            _graphics.PreferredBackBufferWidth = 900;
+            _graphics.PreferredBackBufferHeight = 840;
             _graphics.ApplyChanges();
 
             width = _graphics.PreferredBackBufferWidth;
@@ -114,9 +114,9 @@ namespace simpleRaytracer
             camera = ModelOperations.CreateScene(teapot, mat6, world, lights, aspectRatio);
 
             // sphere testing
-            world.surfaces.Add(new Sphere(new Vector3(2.05f, 0.9f, -7.25f), 3.5f, mat1));
-            world.surfaces.Add(new Sphere(new Vector3(-4.5f, 2f, -8f), 2.3f, mat2));
-            world.surfaces.Add(new Sphere(new Vector3(0,45,-20f), 42.5f, mat3));
+            //world.surfaces.Add(new Sphere(new Vector3(2.05f, 0.9f, -7.25f), 3.5f, mat1));
+            //world.surfaces.Add(new Sphere(new Vector3(-4.5f, 2f, -8f), 2.3f, mat2));
+            //world.surfaces.Add(new Sphere(new Vector3(0,45,-20f), 42.5f, mat3));
             //world.surfaces.Add(new Sphere(new Vector3(-2.5f,3.75f,-5.5f), 0.5f, mat5));
             
 
