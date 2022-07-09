@@ -1,5 +1,5 @@
-## Simple C# Raytracer
-#Made in Monogame
+# Simple C# Raytracer
+##Made in Monogame
 
 This is a simple work-in-progress raytracer coded in C# using the Monogame framework.
 
@@ -7,5 +7,5 @@ As of right now it supports lighting, spheres, and rectangles as well as basic m
 
 Work is in progress on a basic model and scene importer which supports polygonal rendering with BVH trees.
 
-# Example render:
+## Example render:
 ![Basic scene render with coloured spheres](./testrender.jpg)
