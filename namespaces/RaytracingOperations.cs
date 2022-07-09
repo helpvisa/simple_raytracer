@@ -190,7 +190,7 @@ namespace Raytracing
                 return finalColor;
             }
             float t = 0.5f * (direction.Y + 1);
-            return t * new Vector3(0.05f, 0f, 0f) + (1 - t) * new Vector3(0.01f, 0f, 0f);
+            return t * new Vector3(0.2f, 0.17f, 0.17f) + (1 - t) * new Vector3(0.25f, 0.22f, 0.23f);
             //return t * new Vector3(0f,0f,0f);
         }
 

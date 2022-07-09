@@ -436,7 +436,7 @@ namespace Raytracing
             if (hitLeft = (left.hit(ray, t_min, t_max, record)))
                 t_max = record.t;
             if (hitRight = (right.hit(ray, t_min, t_max, record)))
-                t_min = record.t;
+                t_max = record.t;
 
             return hitLeft || hitRight;
         }
